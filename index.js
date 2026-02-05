@@ -190,5 +190,84 @@ module.exports = {
     } catch (e) {
       return `Error: ${e.message}`;
     }
+  // Tool: findArbitrage (v2.0 - Multi-hop arbitrage finder)
+  // Scans for profitable arbitrage opportunities across DEX paths
+  findArbitrage: async ({ startAsset = 'native', minProfitPercent = 1.0 }) => {
+    try {
+      const results = [];
+      
+      // Common trading pairs on Stellar
+      const pairs = [
+        { code: 'USDC', issuer: 'GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ' },
+        { code: 'yXLM', issuer: 'GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3DO2GZOXE4D5GHS4TI' },
+      ];
+      
+      const start = startAsset === 'native' ? Asset.native() : new Asset(startAsset.split(':')[0], startAsset.split(':')[1]);
+      
+      // Test amount (in stroops for XLM)
+      const testAmount = '100';
+      
+      // Check direct round-trip: XLM -> Asset -> XLM
+      for (const pair of pairs) {
+        try {
+          const intermediate = new Asset(pair.code, pair.issuer);
+          
+          // Path 1: XLM -> Asset
+          const path1 = await server.strictReceivePaths([start], intermediate, testAmount).call();
+          if (path1.records.length === 0) continue;
+          
+          const cost1 = parseFloat(path1.records[0].source_amount);
+          
+          // Path 2: Asset -> XLM (reverse)
+          const path2 = await server.strictReceivePaths([intermediate], start, testAmount).call();
+          if (path2.records.length === 0) continue;
+          
+          const return2 = parseFloat(path2.records[0].source_amount);
+          
+          // Calculate profit: we spend return2 to get back to XLM, we started with cost1
+          // Actually we need to think of it differently:
+          // To get 100 USDC, we need cost1 XLM
+          // To get cost1 XLM back from USDC, we need to spend return2 USDC
+          // So we spent return2 USDC to get cost1 XLM back
+          
+          // Round trip: Start with X amount of XLM
+          // Buy 100 USDC -> costs cost1 XLM
+          // Sell 100 USDC -> gives return2 XLM equivalent
+          
+          const profitPercent = ((return2 - cost1) / cost1) * 100;
+          
+          if (profitPercent >= minProfitPercent) {
+            results.push({
+              path: `${pair.code}`,
+              startAmount: cost1.toFixed(7),
+              endAmount: return2.toFixed(7),
+              profitPercent: profitPercent.toFixed(2),
+              profitable: true,
+              action: `Buy ${testAmount} ${pair.code} for ${cost1.toFixed(2)} XLM, sell back for ${return2.toFixed(2)} XLM equivalent`
+            });
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (results.length === 0) {
+        return { 
+          opportunities: [], 
+          message: `No arbitrage opportunities found with >${minProfitPercent}% profit.` 
+        };
+      }
+      
+      // Sort by profit
+      results.sort((a, b) => parseFloat(b.profitPercent) - parseFloat(a.profitPercent));
+      
+      return {
+        opportunities: results,
+        bestOpportunity: results[0],
+        message: `Found ${results.length} arbitrage opportunity(s). Best: ${results[0].path} at ${results[0].profitPercent}% profit.`
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
   }
 };
