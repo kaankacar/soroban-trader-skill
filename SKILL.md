@@ -66,8 +66,47 @@ Get the best exchange rate before trading.
 ### swap({ password, destinationAsset, destinationAmount, maxSourceAmount })
 THE MONEY MAKER. Execute trades autonomously. Signs and submits transactions to the network.
 
+### findArbitrage({ startAsset, minProfitPercent }) - v2.0 🆕
+Scans for profitable arbitrage opportunities across Stellar DEX paths.
+- `startAsset`: Asset to start with (default: "native")
+- `minProfitPercent`: Minimum profit threshold (default: 1.0)
+
+Returns opportunities like:
+```javascript
+{
+  opportunities: [
+    {
+      path: "USDC",
+      profitPercent: "2.45",
+      action: "Buy 100 USDC for 45.23 XLM, sell back for 46.34 XLM"
+    }
+  ],
+  bestOpportunity: {...},
+  message: "Found 1 arbitrage opportunity(s). Best: USDC at 2.45% profit."
+}
+```
+
 ### balance({ address })
 Check any account's XLM balance.
+
+## Example: Find Arbitrage Opportunities (v2.0)
+
+```javascript
+// Scan for arbitrage opportunities
+const arb = await soroban.findArbitrage({
+  startAsset: "native",
+  minProfitPercent: 1.0  // Only show if profit > 1%
+});
+
+if (arb.opportunities.length > 0) {
+  console.log("💰 Found arbitrage!", arb.bestOpportunity);
+  
+  // Execute the trade if profitable
+  if (parseFloat(arb.bestOpportunity.profitPercent) > 2) {
+    // ... execute swap
+  }
+}
+```
 
 ## Example: Autonomous Yield Strategy
 
