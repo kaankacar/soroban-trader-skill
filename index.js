@@ -52,10 +52,11 @@ function saveWallet(wallet, password) {
   fs.writeFileSync(WALLET_FILE, encrypted);
 }
 
-// Stop-loss/Take-profit/DCA storage
+// Stop-loss/Take-profit/DCA/Alerts storage
 const STOPLoss_FILE = path.join(WALLET_DIR, 'stoplosses.json');
 const TAKEPROFIT_FILE = path.join(WALLET_DIR, 'takeprofits.json');
 const DCA_FILE = path.join(WALLET_DIR, 'dca.json');
+const ALERTS_FILE = path.join(WALLET_DIR, 'alerts.json');
 
 function loadStopLosses() {
   try {
@@ -94,6 +95,19 @@ function loadDCAPlans() {
 
 function saveDCAPlans(plans) {
   fs.writeFileSync(DCA_FILE, JSON.stringify(plans, null, 2));
+}
+
+function loadAlerts() {
+  try {
+    if (!fs.existsSync(ALERTS_FILE)) return [];
+    return JSON.parse(fs.readFileSync(ALERTS_FILE, 'utf8'));
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveAlerts(alerts) {
+  fs.writeFileSync(ALERTS_FILE, JSON.stringify(alerts, null, 2));
 }
 
 async function getAssetPrice(assetCode) {
@@ -439,6 +453,116 @@ module.exports = {
         message: active.length > 0 
           ? `${active.length} active DCA plan(s). Next check: run executeDCA().`
           : 'No active DCA plans. Use setupDCA() to create one.'
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: setPriceAlert (v2.1 - Price alerts/notifications)
+  setPriceAlert: async ({ password, asset, targetPrice, condition = 'above' }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const alerts = loadAlerts();
+      const alert = {
+        id: crypto.randomUUID(),
+        asset,
+        targetPrice: parseFloat(targetPrice),
+        condition, // 'above' or 'below'
+        createdAt: new Date().toISOString(),
+        triggered: false,
+        triggeredAt: null
+      };
+      alerts.push(alert);
+      saveAlerts(alerts);
+
+      return {
+        success: true,
+        message: `Price alert set! Will notify when ${asset} goes ${condition} ${targetPrice} XLM.`,
+        alertId: alert.id
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: checkAlerts (v2.1 - Check price alerts)
+  checkAlerts: async ({ password }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const alerts = loadAlerts();
+      const active = alerts.filter(a => !a.triggered);
+      const triggered = [];
+
+      for (const alert of active) {
+        const currentPrice = await getAssetPrice(alert.asset);
+        if (!currentPrice) continue;
+
+        const shouldTrigger = 
+          (alert.condition === 'above' && currentPrice >= alert.targetPrice) ||
+          (alert.condition === 'below' && currentPrice <= alert.targetPrice);
+
+        if (shouldTrigger) {
+          alert.triggered = true;
+          alert.triggeredAt = new Date().toISOString();
+          alert.currentPrice = currentPrice;
+          triggered.push({
+            id: alert.id,
+            asset: alert.asset,
+            condition: alert.condition,
+            targetPrice: alert.targetPrice,
+            currentPrice: currentPrice,
+            message: `🚨 ALERT: ${alert.asset} is ${alert.condition} ${alert.targetPrice} XLM! Current: ${currentPrice.toFixed(6)} XLM`
+          });
+        }
+      }
+
+      saveAlerts(alerts);
+
+      return {
+        activeAlerts: active.length - triggered.length,
+        triggeredAlerts: triggered.length,
+        alerts: triggered,
+        message: triggered.length > 0
+          ? `${triggered.length} price alert(s) triggered!`
+          : `${active.length - triggered.length} alert(s) active. No triggers yet.`
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: listAlerts (v2.1 - List all alerts)
+  listAlerts: async ({ password }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const alerts = loadAlerts();
+      const active = alerts.filter(a => !a.triggered);
+      const history = alerts.filter(a => a.triggered);
+
+      return {
+        active: active.length,
+        history: history.length,
+        activeAlerts: active.map(a => ({
+          id: a.id,
+          asset: a.asset,
+          condition: a.condition,
+          targetPrice: a.targetPrice,
+          createdAt: a.createdAt
+        })),
+        message: `${active.length} active, ${history.length} triggered in the past.`
       };
     } catch (e) {
       return { error: e.message };
