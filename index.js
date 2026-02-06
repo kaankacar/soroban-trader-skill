@@ -52,9 +52,10 @@ function saveWallet(wallet, password) {
   fs.writeFileSync(WALLET_FILE, encrypted);
 }
 
-// Stop-loss/Take-profit storage
+// Stop-loss/Take-profit/DCA storage
 const STOPLoss_FILE = path.join(WALLET_DIR, 'stoplosses.json');
 const TAKEPROFIT_FILE = path.join(WALLET_DIR, 'takeprofits.json');
+const DCA_FILE = path.join(WALLET_DIR, 'dca.json');
 
 function loadStopLosses() {
   try {
@@ -80,6 +81,19 @@ function loadTakeProfits() {
 
 function saveTakeProfits(takeProfits) {
   fs.writeFileSync(TAKEPROFIT_FILE, JSON.stringify(takeProfits, null, 2));
+}
+
+function loadDCAPlans() {
+  try {
+    if (!fs.existsSync(DCA_FILE)) return [];
+    return JSON.parse(fs.readFileSync(DCA_FILE, 'utf8'));
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveDCAPlans(plans) {
+  fs.writeFileSync(DCA_FILE, JSON.stringify(plans, null, 2));
 }
 
 async function getAssetPrice(assetCode) {
@@ -293,6 +307,138 @@ module.exports = {
         success: true,
         message: `Take-profit set for ${amount} ${asset} at ${targetPrice} XLM. Will auto-sell when target hit.`,
         takeProfitId: takeProfits[takeProfits.length - 1].id
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: setupDCA (v2.1 - Dollar Cost Averaging automation)
+  // Automatically buys asset at regular intervals
+  setupDCA: async ({ password, asset, amountPerBuy, intervalHours, totalBuys }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const dcaPlans = loadDCAPlans();
+      const plan = {
+        id: crypto.randomUUID(),
+        asset,
+        amountPerBuy,
+        intervalHours: parseInt(intervalHours),
+        totalBuys: parseInt(totalBuys),
+        buysCompleted: 0,
+        nextBuyAt: new Date(Date.now() + parseInt(intervalHours) * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date().toISOString(),
+        active: true
+      };
+      dcaPlans.push(plan);
+      saveDCAPlans(dcaPlans);
+
+      return {
+        success: true,
+        message: `DCA plan created! Buying ${amountPerBuy} XLM worth of ${asset} every ${intervalHours}h for ${totalBuys} buys. Next buy: ${plan.nextBuyAt}`,
+        planId: plan.id,
+        estimatedTotal: (parseFloat(amountPerBuy) * parseInt(totalBuys)).toFixed(2) + ' XLM'
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: executeDCA (v2.1 - Run pending DCA buys)
+  executeDCA: async ({ password }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const dcaPlans = loadDCAPlans();
+      const now = new Date();
+      const executed = [];
+      const errors = [];
+
+      for (const plan of dcaPlans) {
+        if (!plan.active) continue;
+        if (plan.buysCompleted >= plan.totalBuys) {
+          plan.active = false;
+          continue;
+        }
+
+        const nextBuy = new Date(plan.nextBuyAt);
+        if (now >= nextBuy) {
+          try {
+            // Execute the buy
+            const result = await module.exports.swap({
+              password,
+              destinationAsset: plan.asset,
+              destinationAmount: plan.amountPerBuy,
+              maxSourceAmount: (parseFloat(plan.amountPerBuy) * 1.1).toString() // 10% slippage buffer
+            });
+
+            if (result.success) {
+              plan.buysCompleted++;
+              plan.nextBuyAt = new Date(now.getTime() + plan.intervalHours * 60 * 60 * 1000).toISOString();
+              executed.push({
+                planId: plan.id,
+                asset: plan.asset,
+                amount: plan.amountPerBuy,
+                hash: result.hash,
+                buyNumber: plan.buysCompleted
+              });
+            } else {
+              errors.push({ planId: plan.id, error: result.error });
+            }
+          } catch (e) {
+            errors.push({ planId: plan.id, error: e.message });
+          }
+        }
+      }
+
+      saveDCAPlans(dcaPlans);
+
+      return {
+        executed: executed.length,
+        errors: errors.length,
+        details: executed,
+        errorDetails: errors,
+        message: executed.length > 0 
+          ? `Executed ${executed.length} DCA buy(s). Check details for tx hashes.`
+          : 'No DCA buys due yet. Check back later.'
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: checkDCA (v2.1 - Check DCA plan status)
+  checkDCA: async ({ password }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const dcaPlans = loadDCAPlans();
+      const active = dcaPlans.filter(p => p.active);
+      const completed = dcaPlans.filter(p => !p.active && p.buysCompleted >= p.totalBuys);
+
+      return {
+        activePlans: active.length,
+        completedPlans: completed.length,
+        plans: active.map(p => ({
+          id: p.id,
+          asset: p.asset,
+          progress: `${p.buysCompleted}/${p.totalBuys}`,
+          nextBuy: p.nextBuyAt,
+          percentComplete: ((p.buysCompleted / p.totalBuys) * 100).toFixed(1) + '%'
+        })),
+        message: active.length > 0 
+          ? `${active.length} active DCA plan(s). Next check: run executeDCA().`
+          : 'No active DCA plans. Use setupDCA() to create one.'
       };
     } catch (e) {
       return { error: e.message };

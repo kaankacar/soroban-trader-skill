@@ -9,20 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.0] - 2026-02-06
 
-### 🚀 STOP-LOSS & TAKE-PROFIT AUTOMATION
+### 🚀 STOP-LOSS, TAKE-PROFIT, & DCA AUTOMATION
 
-**New tools for risk management:**
+**New tools for risk management & disciplined investing:**
+
+**Risk Management:**
 - **`setStopLoss()`** - Auto-sell when price drops below threshold
 - **`setTakeProfit()`** - Auto-sell when target price hit  
 - **`checkOrders()`** - Monitor all active orders and see triggers
 
-**Example:**
+**DCA (Dollar Cost Averaging):**
+- **`setupDCA()`** - Create automated buying schedule
+- **`executeDCA()`** - Run pending DCA buys
+- **`checkDCA()`** - Check DCA plan progress
+
+**Examples:**
 ```javascript
 // Protect your position
 await soroban.setStopLoss({
   password: "***",
   asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
-  stopPrice: "0.95",  // Sell if USDC drops below 0.95 XLM
+  stopPrice: "0.95",
   amount: "100"
 });
 
@@ -30,16 +37,25 @@ await soroban.setStopLoss({
 await soroban.setTakeProfit({
   password: "***",
   asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
-  targetPrice: "1.15",  // Sell if USDC hits 1.15 XLM
+  targetPrice: "1.15",
   amount: "100"
 });
 
-// Check if any orders triggered
-const orders = await soroban.checkOrders({ password: "***" });
+// DCA into a position
+await soroban.setupDCA({
+  password: "***",
+  asset: "USDC:GA24L...",
+  amountPerBuy: "10",
+  intervalHours: "24",
+  totalBuys: "30"
+});
+
+// Execute any pending DCA buys
+await soroban.executeDCA({ password: "***" });
 ```
 
 ### Why this matters
-Other agents panic-sell. You set rules and sleep.
+Other agents panic-sell. You set rules and sleep. Other agents FOMO-buy. You DCA and win.
 
 ---
 
