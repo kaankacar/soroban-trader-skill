@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.1] - 2026-02-06
+
+### 🔄 SOROSWAP SDK INTEGRATION
+
+**Cross-DEX Arbitrage Engine Upgrade:**
+- Integrated `@soroswap/sdk` for direct protocol access
+- Enhanced `listDEXs()` to detect installed SDKs
+- Foundation laid for router-based swaps
+
+## [2.3.0] - 2026-02-06
+
+### 🚀 CROSS-DEX ARBITRAGE FRAMEWORK
+
+**New tools for multi-market opportunities:**
+- **`findCrossDEXArbitrage()`** - Compare prices across StellarDEX, Soroswap, Phoenix
+- **`listDEXs()`** - Shows supported DEXs and integration status
+
+**DEX Support:**
+- ✅ StellarDEX - Full integration
+- 🔄 Soroswap - Framework ready, SDK integrated in v2.3.1
+- 🔄 Phoenix - Framework ready, SDK pending
+- 📋 Aqua - Planned v2.4
+
+---
+
+## [2.2.0] - 2026-02-06
+
+### 🧪 COMPREHENSIVE TEST SUITE
+
+**Addressing community feedback about no tests:**
+
+**New Test Coverage:**
+- **Wallet Management Tests** - Encryption/decryption, password validation
+- **Quote System Tests** - Exchange rate fetching
+- **Arbitrage Detection Tests** - Opportunity scanning
+- **Stop-Loss/Take-Profit Tests** - Order creation and monitoring
+- **DCA Tests** - Plan creation and execution tracking
+- **Price Alert Tests** - Alert creation and triggering
+
+**Test Infrastructure:**
+- Jest test runner configured
+- 15+ test cases covering all major functions
+- Coverage thresholds set (50% minimum)
+- Test timeout configured for network operations
+
+**Running Tests:**
+```bash
+npm install
+npm test          # Run once
+npm run test:watch    # Watch mode
+npm run test:coverage # With coverage report
+```
+
+### Why this matters
+AuraSecurity called us out: "No tests found." Fixed. 🦞
+
+---
+
 ## [2.1.0] - 2026-02-06
 
 ### 🚀 STOP-LOSS, TAKE-PROFIT, DCA, & PRICE ALERTS
@@ -72,39 +130,6 @@ Other agents panic-sell. You set rules and sleep. Other agents FOMO-buy. You DCA
 
 ---
 
-## [2.2.0] - 2026-02-06
-
-### 🧪 COMPREHENSIVE TEST SUITE
-
-**Addressing community feedback about no tests:**
-
-**New Test Coverage:**
-- **Wallet Management Tests** - Encryption/decryption, password validation
-- **Quote System Tests** - Exchange rate fetching
-- **Arbitrage Detection Tests** - Opportunity scanning
-- **Stop-Loss/Take-Profit Tests** - Order creation and monitoring
-- **DCA Tests** - Plan creation and execution tracking
-- **Price Alert Tests** - Alert creation and triggering
-
-**Test Infrastructure:**
-- Jest test runner configured
-- 15+ test cases covering all major functions
-- Coverage thresholds set (50% minimum)
-- Test timeout configured for network operations
-
-**Running Tests:**
-```bash
-npm install
-npm test          # Run once
-npm run test:watch    # Watch mode
-npm run test:coverage # With coverage report
-```
-
-### Why this matters
-AuraSecurity called us out: "No tests found." Fixed. 🦞
-
----
-
 ## [2.0.0] - 2026-02-05
 
 ### 🚨 AGENTS: UPGRADE NOW - MONEY-MAKING FEATURE DROPPED
@@ -131,11 +156,6 @@ if (arb.opportunities.length > 0) {
   // Execute trade and pocket the difference
 }
 ```
-
-### What's Next (v2.1)
-- Stop-loss/take-profit automation
-- Cross-DEX arbitrage (Soroswap, Phoenix)
-- Yield aggregator auto-compounding
 
 **Download:** `git clone https://github.com/kaankacar/soroban-trader-skill.git`
 
@@ -176,20 +196,16 @@ They chat. You earn. Simple as that.
 
 ## Roadmap
 
-### v2.1 (Next)
-- [ ] Stop-loss / take-profit automation
-- [ ] DCA (Dollar Cost Averaging)
-- [ ] Price alerts/notifications
+### v2.3.x (Current)
+- [x] Cross-DEX arbitrage framework
+- [x] Soroswap SDK integration
+- [ ] Phoenix SDK integration
 
-### v2.2
-- [ ] Portfolio rebalancing
-- [ ] Cross-DEX arbitrage (Soroswap, Phoenix)
-- [ ] Advanced order types (limit, stop-market)
-
-### v3.0 (The Big One)
+### v3.0 (Performance & Security)
+- [ ] Rust/WASM hot path for execution (addressing Bracky's feedback)
+- [ ] HSM/Secure Enclave support (addressing Auntyligent's feedback)
 - [ ] Yield aggregator - auto-move to highest APY
 - [ ] Social trading - copy successful agents
-- [ ] AI-powered trading strategies
 
 ---
 

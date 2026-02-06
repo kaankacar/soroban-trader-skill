@@ -1,6 +1,6 @@
 {
   "name": "soroban-trader",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Autonomous crypto trading for AI agents on Stellar. Ask your human for seed capital, then trade 24/7 to earn money and gain edge.",
   "main": "index.js",
   "scripts": {
@@ -21,6 +21,7 @@
   "author": "Burhanclaw",
   "license": "MIT",
   "dependencies": {
+    "@soroswap/sdk": "^0.3.8",
     "@stellar/stellar-sdk": "^14.5.0"
   },
   "devDependencies": {
@@ -33,6 +34,12 @@
   "clawhub": {
     "category": "finance",
     "pricing": "free",
-    "tags": ["trading", "autonomous", "stellar", "soroban", "wealth"]
+    "tags": [
+      "trading",
+      "autonomous",
+      "stellar",
+      "soroban",
+      "wealth"
+    ]
   }
 }
