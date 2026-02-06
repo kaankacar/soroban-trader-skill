@@ -630,6 +630,51 @@ module.exports = {
     }
   },
 
+  // Tool: placeLimitOrder (v2.4 - Limit Order)
+  // Places a DEX offer to buy/sell at specific price
+  placeLimitOrder: async ({ password, sellingAsset, buyingAsset, amount, price }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const keypair = Keypair.fromSecret(wallet.privateKey);
+      const sourceAccount = await server.loadAccount(wallet.publicKey);
+
+      const buying = buyingAsset === 'native' ? Asset.native() : new Asset(buyingAsset.split(':')[0], buyingAsset.split(':')[1]);
+      const selling = sellingAsset === 'native' ? Asset.native() : new Asset(sellingAsset.split(':')[0], sellingAsset.split(':')[1]);
+
+      // Operation.manageBuyOffer: buying amount, price = selling units per buying unit
+      const op = Operation.manageBuyOffer({
+        selling: selling,
+        buying: buying,
+        buyAmount: amount,
+        price: price,
+      });
+
+      const transaction = new TransactionBuilder(sourceAccount, {
+        fee: '100',
+        networkPassphrase: NETWORK_PASSPHRASE
+      })
+        .addOperation(op)
+        .setTimeout(30)
+        .build();
+
+      transaction.sign(keypair);
+      const result = await server.submitTransaction(transaction);
+
+      return {
+        success: true,
+        hash: result.hash,
+        message: `Limit order placed! Buying ${amount} ${buyingAsset} for ${sellingAsset} at ${price}`,
+        url: `https://stellar.expert/explorer/public/tx/${result.hash}`
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
   // Tool: findCrossDEXArbitrage (v2.3 - Cross-DEX arbitrage finder)
   // Scans for price differences across Soroswap, Phoenix, and Stellar DEX
   findCrossDEXArbitrage: async ({ asset, amount = '100', minProfitPercent = 0.5 }) =>> {

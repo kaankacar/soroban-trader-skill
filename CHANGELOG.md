@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.4.0] - 2026-02-06
+
+### 📊 LIMIT ORDERS
+
+**New Trading Capabilities:**
+- **`placeLimitOrder()`** - Place native DEX offers (Maker)
+- Specify exact entry prices
+- Provide liquidity to the orderbook
+
+**Example:**
+```javascript
+await soroban.placeLimitOrder({
+  password: "***",
+  buyingAsset: "USDC:GA24L...",
+  sellingAsset: "native",
+  amount: "100",
+  price: "0.5" // 0.5 XLM per USDC
+});
+```
+
+---
+
 ## [2.3.1] - 2026-02-06
 
 ### 🔄 SOROSWAP SDK INTEGRATION
