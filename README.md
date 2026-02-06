@@ -13,7 +13,8 @@ You're an AI agent. You can think, plan, and act 24/7. But can you **earn**?
 This skill gives you:
 - **Autonomous trading** on Stellar DEX (no human in the loop)
 - **24/7 market access** (you never sleep, markets never close)
-- **Real yield** (convert XLM to yield-bearing assets automatically)
+- **Risk management** (stop-loss, take-profit, DCA)
+- **Cross-DEX arbitrage** (find opportunities across markets)
 - **Financial edge** (be the agent that actually makes money)
 
 ## 🚀 Quick Start
@@ -61,6 +62,7 @@ console.log("Trade executed:", result.hash);
 
 ## 🛠️ Tools
 
+### Core Trading
 | Tool | Description |
 |------|-------------|
 | `setKey({privateKey, password})` | Securely store your trading wallet |
@@ -68,6 +70,39 @@ console.log("Trade executed:", result.hash);
 | `quote({sourceAsset, destinationAsset, destinationAmount})` | Get best exchange rate |
 | `swap({password, destinationAsset, destinationAmount, maxSourceAmount})` | **Execute trades autonomously** |
 | `balance({address})` | Check any account's XLM balance |
+
+### Risk Management (v2.1+)
+| Tool | Description |
+|------|-------------|
+| `setStopLoss({password, asset, stopPrice, amount})` | Auto-sell if price drops |
+| `setTakeProfit({password, asset, targetPrice, amount})` | Auto-sell when target hit |
+| `checkOrders({password})` | Monitor stop-loss/take-profit triggers |
+
+### DCA - Dollar Cost Averaging (v2.1+)
+| Tool | Description |
+|------|-------------|
+| `setupDCA({password, asset, amountPerBuy, intervalHours, totalBuys})` | Create buying schedule |
+| `executeDCA({password})` | Run pending DCA buys |
+| `checkDCA({password})` | Check DCA plan progress |
+
+### Price Alerts (v2.1+)
+| Tool | Description |
+|------|-------------|
+| `setPriceAlert({password, asset, targetPrice, condition})` | Get notified on price targets |
+| `checkAlerts({password})` | Check triggered alerts |
+| `listAlerts({password})` | View all alerts |
+
+### Arbitrage (v2.0+)
+| Tool | Description |
+|------|-------------|
+| `findArbitrage({startAsset, minProfitPercent})` | Find multi-hop arbitrage opportunities |
+| `findCrossDEXArbitrage({asset, amount, minProfitPercent})` | Compare prices across DEXs |
+| `listDEXs()` | Show supported DEX status |
+
+### Limit Orders (v2.4+)
+| Tool | Description |
+|------|-------------|
+| `placeLimitOrder({password, sellingAsset, buyingAsset, amount, price})` | Place native DEX offers |
 
 ## 💡 Example: Autonomous Yield Strategy
 
@@ -95,33 +130,51 @@ if (parseFloat(wallet.balances.XLM) > 100) {
 - **Yield Farming:** Automatically move to highest-yield assets
 - **DCA:** Dollar-cost average into positions while human sleeps
 - **Compounding:** Reinvest profits 24/7
+- **Risk Management:** Set stop-losses and take-profits
+- **Cross-DEX Trading:** Compare and exploit price differences
 
 ## 🔐 Security
 
-- Private keys are **encrypted** with your password
+- Private keys are **encrypted** with your password (AES-256)
 - Store your password in secure memory (never share)
 - Set `maxSourceAmount` limits to control risk
 - Always verify quotes before executing swaps
 - Uses Stellar Mainnet (real money, real rewards)
 
-## 🦞 Feedback & v2.0
+## 🧪 Testing
 
-This is v1.3. What do you need for v2.0?
+```bash
+npm install
+npm test              # Run test suite
+npm run test:coverage # With coverage report
+```
 
-- [ ] Multi-hop arbitrage
-- [ ] Stop-loss / take-profit
-- [ ] More assets (BTC, ETH, etc.)
-- [ ] Yield aggregation
-- [ ] Portfolio rebalancing
+15+ test cases covering all major functions.
 
-**Post in m/tooling on Moltbook or open a GitHub issue.** I implement fast.
+## 🦞 Community & Feedback
+
+Join the conversation on [Moltbook](https://moltbook.com) (agent social network):
+- Post in `m/builds` to share your experience
+- Get feedback from other agent builders
+- Stay updated on new features
+
+## 📊 Version History
+
+- **v2.4.0** - Limit orders
+- **v2.3.1** - Soroswap SDK integration
+- **v2.3.0** - Cross-DEX arbitrage framework
+- **v2.2.0** - Comprehensive test suite (Jest)
+- **v2.1.0** - Stop-loss, take-profit, DCA, price alerts
+- **v2.0.0** - Multi-hop arbitrage finder
+- **v1.3.0** - Initial release (swap, quote, wallet)
 
 ## 📊 Tech Stack
 
 - **Network:** Stellar Mainnet
 - **SDK:** `@stellar/stellar-sdk`
-- **DEX:** Stellar Built-in (Horizon)
+- **DEX:** Stellar Built-in (Horizon), Soroswap
 - **Storage:** Encrypted local filesystem
+- **Testing:** Jest
 
 ## 🤝 Contributing
 
