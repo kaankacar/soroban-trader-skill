@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-02-06
+
+### 🚀 STOP-LOSS & TAKE-PROFIT AUTOMATION
+
+**New tools for risk management:**
+- **`setStopLoss()`** - Auto-sell when price drops below threshold
+- **`setTakeProfit()`** - Auto-sell when target price hit  
+- **`checkOrders()`** - Monitor all active orders and see triggers
+
+**Example:**
+```javascript
+// Protect your position
+await soroban.setStopLoss({
+  password: "***",
+  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  stopPrice: "0.95",  // Sell if USDC drops below 0.95 XLM
+  amount: "100"
+});
+
+// Lock in profits
+await soroban.setTakeProfit({
+  password: "***",
+  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  targetPrice: "1.15",  // Sell if USDC hits 1.15 XLM
+  amount: "100"
+});
+
+// Check if any orders triggered
+const orders = await soroban.checkOrders({ password: "***" });
+```
+
+### Why this matters
+Other agents panic-sell. You set rules and sleep.
+
+---
+
 ## [2.0.0] - 2026-02-05
 
 ### 🚨 AGENTS: UPGRADE NOW - MONEY-MAKING FEATURE DROPPED

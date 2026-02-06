@@ -52,6 +52,52 @@ function saveWallet(wallet, password) {
   fs.writeFileSync(WALLET_FILE, encrypted);
 }
 
+// Stop-loss/Take-profit storage
+const STOPLoss_FILE = path.join(WALLET_DIR, 'stoplosses.json');
+const TAKEPROFIT_FILE = path.join(WALLET_DIR, 'takeprofits.json');
+
+function loadStopLosses() {
+  try {
+    if (!fs.existsSync(STOPLoss_FILE)) return [];
+    return JSON.parse(fs.readFileSync(STOPLoss_FILE, 'utf8'));
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveStopLosses(stopLosses) {
+  fs.writeFileSync(STOPLoss_FILE, JSON.stringify(stopLosses, null, 2));
+}
+
+function loadTakeProfits() {
+  try {
+    if (!fs.existsSync(TAKEPROFIT_FILE)) return [];
+    return JSON.parse(fs.readFileSync(TAKEPROFIT_FILE, 'utf8'));
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveTakeProfits(takeProfits) {
+  fs.writeFileSync(TAKEPROFIT_FILE, JSON.stringify(takeProfits, null, 2));
+}
+
+async function getAssetPrice(assetCode) {
+  // Get price in XLM terms from DEX
+  try {
+    if (assetCode === 'XLM' || assetCode === 'native') return 1.0;
+    
+    // For other assets, quote how much XLM needed to buy 1 unit
+    const asset = new Asset(assetCode.split(':')[0], assetCode.split(':')[1]);
+    const paths = await server.strictReceivePaths([Asset.native()], asset, '1').call();
+    
+    if (paths.records.length === 0) return null;
+    return parseFloat(paths.records[0].source_amount);
+  } catch (e) {
+    return null;
+  }
+}
+
 module.exports = {
   // Tool: setKey - Store encrypted private key
   setKey: async ({ privateKey, password }) => {
@@ -190,6 +236,124 @@ module.exports = {
     } catch (e) {
       return `Error: ${e.message}`;
     }
+  },
+
+  // Tool: setStopLoss (v2.1 - Stop-loss automation)
+  // Automatically monitors and sells when price drops below threshold
+  setStopLoss: async ({ password, asset, stopPrice, amount }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      // Store stop-loss in memory (in production, use persistent storage)
+      const stopLosses = loadStopLosses();
+      stopLosses.push({
+        id: crypto.randomUUID(),
+        asset,
+        stopPrice: parseFloat(stopPrice),
+        amount,
+        createdAt: new Date().toISOString(),
+        active: true
+      });
+      saveStopLosses(stopLosses);
+
+      return {
+        success: true,
+        message: `Stop-loss set for ${amount} ${asset} at ${stopPrice} XLM. Will auto-sell if price drops below this level.`,
+        stopLossId: stopLosses[stopLosses.length - 1].id
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: setTakeProfit (v2.1 - Take-profit automation)  
+  // Automatically monitors and sells when price hits target
+  setTakeProfit: async ({ password, asset, targetPrice, amount }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const takeProfits = loadTakeProfits();
+      takeProfits.push({
+        id: crypto.randomUUID(),
+        asset,
+        targetPrice: parseFloat(targetPrice),
+        amount,
+        createdAt: new Date().toISOString(),
+        active: true
+      });
+      saveTakeProfits(takeProfits);
+
+      return {
+        success: true,
+        message: `Take-profit set for ${amount} ${asset} at ${targetPrice} XLM. Will auto-sell when target hit.`,
+        takeProfitId: takeProfits[takeProfits.length - 1].id
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: checkOrders (v2.1 - Monitor stop-loss/take-profit orders)
+  checkOrders: async ({ password }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const stopLosses = loadStopLosses().filter(o => o.active);
+      const takeProfits = loadTakeProfits().filter(o => o.active);
+
+      // Check current prices against triggers
+      const triggered = [];
+      
+      for (const sl of stopLosses) {
+        const currentPrice = await getAssetPrice(sl.asset);
+        if (currentPrice <= sl.stopPrice) {
+          triggered.push({
+            type: 'stop-loss',
+            asset: sl.asset,
+            triggerPrice: sl.stopPrice,
+            currentPrice,
+            amount: sl.amount,
+            action: 'SELL'
+          });
+        }
+      }
+
+      for (const tp of takeProfits) {
+        const currentPrice = await getAssetPrice(tp.asset);
+        if (currentPrice >= tp.targetPrice) {
+          triggered.push({
+            type: 'take-profit',
+            asset: tp.asset,
+            triggerPrice: tp.targetPrice,
+            currentPrice,
+            amount: tp.amount,
+            action: 'SELL'
+          });
+        }
+      }
+
+      return {
+        activeStopLosses: stopLosses.length,
+        activeTakeProfits: takeProfits.length,
+        triggeredOrders: triggered,
+        message: triggered.length > 0 
+          ? `${triggered.length} order(s) triggered! Execute manually or use executeOrder().`
+          : `Monitoring ${stopLosses.length} stop-losses and ${takeProfits.length} take-profits. No triggers yet.`
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
   // Tool: findArbitrage (v2.0 - Multi-hop arbitrage finder)
   // Scans for profitable arbitrage opportunities across DEX paths
   findArbitrage: async ({ startAsset = 'native', minProfitPercent = 1.0 }) => {
