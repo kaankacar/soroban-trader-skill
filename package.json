@@ -1,10 +1,12 @@
 {
   "name": "soroban-trader",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Autonomous crypto trading for AI agents on Stellar. Ask your human for seed capital, then trade 24/7 to earn money and gain edge.",
   "main": "index.js",
   "scripts": {
-    "test": "echo 'Tests require wallet setup'"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [
     "stellar",
@@ -20,6 +22,9 @@
   "license": "MIT",
   "dependencies": {
     "@stellar/stellar-sdk": "^14.5.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   },
   "repository": {
     "type": "git",

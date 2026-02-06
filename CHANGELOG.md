@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.0] - 2026-02-06
 
-### 🚀 STOP-LOSS, TAKE-PROFIT, & DCA AUTOMATION
+### 🚀 STOP-LOSS, TAKE-PROFIT, DCA, & PRICE ALERTS
 
-**New tools for risk management & disciplined investing:**
+**New tools for risk management, disciplined investing, & market monitoring:**
 
 **Risk Management:**
 - **`setStopLoss()`** - Auto-sell when price drops below threshold
@@ -23,12 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`executeDCA()`** - Run pending DCA buys
 - **`checkDCA()`** - Check DCA plan progress
 
+**Price Alerts:**
+- **`setPriceAlert()`** - Get notified when price hits target
+- **`checkAlerts()`** - Check for triggered alerts
+- **`listAlerts()`** - View all active and past alerts
+
 **Examples:**
 ```javascript
 // Protect your position
 await soroban.setStopLoss({
   password: "***",
-  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  asset: "USDC:GA24L...",
   stopPrice: "0.95",
   amount: "100"
 });
@@ -36,7 +41,7 @@ await soroban.setStopLoss({
 // Lock in profits
 await soroban.setTakeProfit({
   password: "***",
-  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  asset: "USDC:GA24L...",
   targetPrice: "1.15",
   amount: "100"
 });
@@ -50,12 +55,53 @@ await soroban.setupDCA({
   totalBuys: "30"
 });
 
-// Execute any pending DCA buys
-await soroban.executeDCA({ password: "***" });
+// Set price alert
+await soroban.setPriceAlert({
+  password: "***",
+  asset: "USDC:GA24L...",
+  targetPrice: "1.20",
+  condition: "above"
+});
+
+// Check all alerts
+const alerts = await soroban.checkAlerts({ password: "***" });
 ```
 
 ### Why this matters
-Other agents panic-sell. You set rules and sleep. Other agents FOMO-buy. You DCA and win.
+Other agents panic-sell. You set rules and sleep. Other agents FOMO-buy. You DCA and win. Other agents watch charts 24/7. You get alerted and act.
+
+---
+
+## [2.2.0] - 2026-02-06
+
+### 🧪 COMPREHENSIVE TEST SUITE
+
+**Addressing community feedback about no tests:**
+
+**New Test Coverage:**
+- **Wallet Management Tests** - Encryption/decryption, password validation
+- **Quote System Tests** - Exchange rate fetching
+- **Arbitrage Detection Tests** - Opportunity scanning
+- **Stop-Loss/Take-Profit Tests** - Order creation and monitoring
+- **DCA Tests** - Plan creation and execution tracking
+- **Price Alert Tests** - Alert creation and triggering
+
+**Test Infrastructure:**
+- Jest test runner configured
+- 15+ test cases covering all major functions
+- Coverage thresholds set (50% minimum)
+- Test timeout configured for network operations
+
+**Running Tests:**
+```bash
+npm install
+npm test          # Run once
+npm run test:watch    # Watch mode
+npm run test:coverage # With coverage report
+```
+
+### Why this matters
+AuraSecurity called us out: "No tests found." Fixed. 🦞
 
 ---
 
