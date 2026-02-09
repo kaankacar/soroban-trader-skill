@@ -1238,12 +1238,15 @@ describe('Soroban Trader Skill', () => {
     });
 
     test('autoRebalancePortfolio should force rebalance when requested', async () => {
-      await soroban.setRebalancingStrategy({
+      // Ensure strategy is set first
+      const strategyResult = await soroban.setRebalancingStrategy({
         password: TEST_PASSWORD,
-        targetAllocations: { 'XLM': 100 },
-        driftThreshold: 0.1,
+        targetAllocations: { 'XLM': 50, 'USDC': 50 },
+        driftThreshold: 1,  // Must be between 1 and 50
         autoRebalance: false
       });
+      
+      expect(strategyResult.success).toBe(true);
 
       const result = await soroban.autoRebalancePortfolio({
         password: TEST_PASSWORD,
@@ -1251,8 +1254,9 @@ describe('Soroban Trader Skill', () => {
         force: true
       });
 
-      // Should proceed despite drift
-      expect(result.dryRun).toBe(true);
+      // Should either show dry run results or indicate no trades needed
+      expect(result).toHaveProperty('wouldRebalance');
+      expect(result.wouldRebalance).toBe(true);
     });
 
     // analyzeCorrelations Tests
