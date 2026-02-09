@@ -753,4 +753,326 @@ describe('Soroban Trader Skill', () => {
       expect(result.error).toContain('No wallet configured');
     });
   });
+
+  // === V3.2 FEATURES: Advanced Routing & Multi-Hop ===
+  describe('Advanced Routing (v3.2)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('findMultiHopRoute should find routes with different hop counts', async () => {
+      const result = await soroban.findMultiHopRoute({
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '100',
+        maxHops: 3
+      });
+
+      expect(result).toHaveProperty('routes');
+      expect(Array.isArray(result.routes)).toBe(true);
+      expect(result).toHaveProperty('bestRoute');
+      expect(result).toHaveProperty('totalRoutes');
+      expect(result.sourceAsset).toBe('native');
+      expect(result.maxHops).toBe(3);
+    }, 15000);
+
+    test('findMultiHopRoute should respect maxHops parameter', async () => {
+      const result = await soroban.findMultiHopRoute({
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '10',
+        maxHops: 2
+      });
+
+      result.routes.forEach(route => {
+        expect(route.hops).toBeLessThanOrEqual(2);
+      });
+    }, 15000);
+
+    test('findMultiHopRoute should return route metadata', async () => {
+      const result = await soroban.findMultiHopRoute({
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '50'
+      });
+
+      if (result.routes.length > 0) {
+        const route = result.routes[0];
+        expect(route).toHaveProperty('id');
+        expect(route).toHaveProperty('hops');
+        expect(route).toHaveProperty('path');
+        expect(route).toHaveProperty('sourceAmount');
+        expect(route).toHaveProperty('estimatedSlippage');
+      }
+    }, 15000);
+
+    test('findMultiHopRoute should error without destinationAsset', async () => {
+      const result = await soroban.findMultiHopRoute({
+        sourceAsset: 'native',
+        amount: '100'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('destinationAsset is required');
+    });
+
+    test('calculatePriceImpact should estimate impact for trade', async () => {
+      const result = await soroban.calculatePriceImpact({
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        sourceAmount: '1000'
+      });
+
+      expect(result).toHaveProperty('estimatedPriceImpact');
+      expect(result).toHaveProperty('impactLevel');
+      expect(['low', 'medium', 'high', 'extreme']).toContain(result.impactLevel);
+      expect(result).toHaveProperty('sourceAsset');
+      expect(result).toHaveProperty('destinationAsset');
+    }, 10000);
+
+    test('calculatePriceImpact should provide split recommendations for large orders', async () => {
+      const result = await soroban.calculatePriceImpact({
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        sourceAmount: '50000'
+      });
+
+      expect(result).toHaveProperty('recommendedSplits');
+      expect(Array.isArray(result.recommendedSplits)).toBe(true);
+      expect(result.recommendedSplits.length).toBeGreaterThan(0);
+    }, 10000);
+
+    test('calculatePriceImpact should error without required params', async () => {
+      const result = await soroban.calculatePriceImpact({
+        sourceAsset: 'native'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('destinationAsset');
+    });
+  });
+
+  describe('Smart Order Routing (v3.2)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('smartRoute should require wallet', async () => {
+      const result = await soroban.smartRoute({
+        password: 'wrong-password',
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '100'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    test('smartRoute should create execution plan', async () => {
+      const result = await soroban.smartRoute({
+        password: TEST_PASSWORD,
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '100',
+        isSourceAmount: false
+      });
+
+      expect(result).toHaveProperty('success');
+      expect(result).toHaveProperty('executionPlan');
+      expect(result).toHaveProperty('summary');
+      expect(result.summary).toHaveProperty('strategy');
+      expect(result.summary).toHaveProperty('numRoutes');
+    }, 15000);
+
+    test('smartRoute should include route details', async () => {
+      const result = await soroban.smartRoute({
+        password: TEST_PASSWORD,
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '50',
+        isSourceAmount: false,
+        maxSplits: 2
+      });
+
+      expect(result).toHaveProperty('routeDetails');
+      expect(Array.isArray(result.routeDetails)).toBe(true);
+      expect(result).toHaveProperty('recommendations');
+      expect(result).toHaveProperty('sorId');
+      expect(result).toHaveProperty('readyToExecute');
+    }, 15000);
+
+    test('smartRoute should require destinationAsset', async () => {
+      const result = await soroban.smartRoute({
+        password: TEST_PASSWORD,
+        sourceAsset: 'native',
+        amount: '100'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('destinationAsset');
+    });
+
+    test('executeSmartRoute should require wallet', async () => {
+      const result = await soroban.executeSmartRoute({
+        password: 'wrong-password',
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '10',
+        maxSourceAmount: '50'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    test('executeSmartRoute should support dryRun', async () => {
+      const result = await soroban.executeSmartRoute({
+        password: TEST_PASSWORD,
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '10',
+        maxSourceAmount: '50',
+        dryRun: true
+      });
+
+      expect(result.dryRun).toBe(true);
+      expect(result).toHaveProperty('executionPlan');
+    }, 15000);
+
+    test('getRoutingStats should return statistics', async () => {
+      await soroban.smartRoute({
+        password: TEST_PASSWORD,
+        sourceAsset: 'native',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        amount: '10',
+        isSourceAmount: false
+      });
+
+      const result = await soroban.getRoutingStats({ password: TEST_PASSWORD });
+
+      expect(result).toHaveProperty('totalRoutes');
+      expect(result).toHaveProperty('sorExecutions');
+      expect(result).toHaveProperty('performance');
+      expect(result).toHaveProperty('topRoutes');
+      expect(Array.isArray(result.topRoutes)).toBe(true);
+    }, 15000);
+
+    test('getRoutingStats should require wallet', async () => {
+      const result = await soroban.getRoutingStats({ password: 'wrong-password' });
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe('Cross-Chain Arbitrage (v3.2)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('findCrossChainArbitrage should find opportunities', async () => {
+      const result = await soroban.findCrossChainArbitrage({
+        sourceChain: 'stellar',
+        targetChains: ['ethereum', 'solana'],
+        minProfitPercent: 0.1
+      });
+
+      expect(result).toHaveProperty('opportunities');
+      expect(Array.isArray(result.opportunities)).toBe(true);
+      expect(result).toHaveProperty('count');
+      expect(result).toHaveProperty('sourceChain');
+      expect(result).toHaveProperty('targetChains');
+      expect(result).toHaveProperty('profitable');
+    });
+
+    test('findCrossChainArbitrage should filter by minProfitPercent', async () => {
+      const highThreshold = await soroban.findCrossChainArbitrage({
+        sourceChain: 'stellar',
+        targetChains: ['ethereum'],
+        minProfitPercent: 10.0
+      });
+
+      const lowThreshold = await soroban.findCrossChainArbitrage({
+        sourceChain: 'stellar',
+        targetChains: ['ethereum'],
+        minProfitPercent: 0.1
+      });
+
+      expect(highThreshold.count).toBeLessThanOrEqual(lowThreshold.count);
+    });
+
+    test('findCrossChainArbitrage should include bridge information', async () => {
+      const result = await soroban.findCrossChainArbitrage({
+        sourceChain: 'stellar',
+        targetChains: ['ethereum'],
+        minProfitPercent: 0.1
+      });
+
+      if (result.opportunities.length > 0) {
+        const opp = result.opportunities[0];
+        expect(opp).toHaveProperty('bridge');
+        expect(opp).toHaveProperty('bridgeTime');
+        expect(opp).toHaveProperty('bridgeCost');
+        expect(opp).toHaveProperty('netProfit');
+      }
+    });
+
+    test('executeCrossChainArbitrage should require wallet', async () => {
+      const result = await soroban.executeCrossChainArbitrage({
+        password: 'wrong-password',
+        destinationChain: 'ethereum',
+        asset: 'USDC',
+        amount: '100'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    test('executeCrossChainArbitrage should require opportunityId or destinationChain', async () => {
+      const result = await soroban.executeCrossChainArbitrage({
+        password: TEST_PASSWORD,
+        amount: '100'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('opportunityId');
+    });
+
+    test('executeCrossChainArbitrage should create execution steps', async () => {
+      const result = await soroban.executeCrossChainArbitrage({
+        password: TEST_PASSWORD,
+        destinationChain: 'ethereum',
+        asset: 'XLM',  // Use XLM which doesn't require swap
+        amount: '100',
+        bridge: 'Allbridge',
+        autoReturn: true
+      });
+
+      // Should succeed without needing to acquire asset
+      expect(result).toHaveProperty('success');
+      expect(result).toHaveProperty('executionSteps');
+      expect(Array.isArray(result.executionSteps)).toBe(true);
+      expect(result).toHaveProperty('status');
+      expect(result).toHaveProperty('risks');
+      expect(result).toHaveProperty('monitoring');
+    }, 30000);
+
+    test('executeCrossChainArbitrage should include bridge step', async () => {
+      const result = await soroban.executeCrossChainArbitrage({
+        password: TEST_PASSWORD,
+        destinationChain: 'solana',
+        asset: 'XLM',  // Use XLM which doesn't require swap
+        amount: '1000',
+        bridge: 'Allbridge'
+      });
+
+      expect(result.success).toBe(true);
+      const bridgeStep = result.executionSteps.find(s => s.action === 'bridge');
+      expect(bridgeStep).toBeDefined();
+      expect(bridgeStep.bridge).toBe('Allbridge');
+    }, 30000);
+  });
 });

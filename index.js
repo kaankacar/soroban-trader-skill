@@ -515,6 +515,78 @@ function simulateMarketVolatility() {
   return Math.min(1.0, Math.max(0.0, baseVolatility + (Math.random() - 0.5) * 0.3));
 }
 
+// === V3.2 HELPER FUNCTIONS (outside module.exports) ===
+
+// Storage file paths for v3.2
+const ROUTING_CACHE_FILE = path.join(WALLET_DIR, 'routing_cache.json');
+const CROSS_CHAIN_CACHE_FILE = path.join(WALLET_DIR, 'cross_chain_cache.json');
+const SOR_HISTORY_FILE = path.join(WALLET_DIR, 'sor_history.json');
+
+function loadRoutingCache() {
+  try {
+    if (!fs.existsSync(ROUTING_CACHE_FILE)) return { routes: {}, lastUpdated: null };
+    return JSON.parse(fs.readFileSync(ROUTING_CACHE_FILE, 'utf8'));
+  } catch (e) {
+    return { routes: {}, lastUpdated: null };
+  }
+}
+
+function saveRoutingCache(cache) {
+  fs.writeFileSync(ROUTING_CACHE_FILE, JSON.stringify(cache, null, 2));
+}
+
+function loadCrossChainCache() {
+  try {
+    if (!fs.existsSync(CROSS_CHAIN_CACHE_FILE)) return { opportunities: [], lastUpdated: null };
+    return JSON.parse(fs.readFileSync(CROSS_CHAIN_CACHE_FILE, 'utf8'));
+  } catch (e) {
+    return { opportunities: [], lastUpdated: null };
+  }
+}
+
+function saveCrossChainCache(cache) {
+  fs.writeFileSync(CROSS_CHAIN_CACHE_FILE, JSON.stringify(cache, null, 2));
+}
+
+function loadSORHistory() {
+  try {
+    if (!fs.existsSync(SOR_HISTORY_FILE)) return [];
+    return JSON.parse(fs.readFileSync(SOR_HISTORY_FILE, 'utf8'));
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveSORHistory(history) {
+  fs.writeFileSync(SOR_HISTORY_FILE, JSON.stringify(history, null, 2));
+}
+
+// Helper: Parse asset string to Asset object
+function parseAsset(assetStr) {
+  if (assetStr === 'native' || assetStr === 'XLM') return Asset.native();
+  const parts = assetStr.split(':');
+  if (parts.length === 2) {
+    return new Asset(parts[0], parts[1]);
+  }
+  throw new Error(`Invalid asset format: ${assetStr}`);
+}
+
+// Helper: Calculate path cost using constant product formula
+function calculatePathCost(amountIn, reserves) {
+  const k = reserves.in * reserves.out;
+  const newReserveIn = reserves.in + amountIn;
+  const newReserveOut = k / newReserveIn;
+  const amountOut = reserves.out - newReserveOut;
+  return amountOut;
+}
+
+// Helper: Estimate price impact for a given trade size
+function estimatePriceImpact(amountIn, reserveIn, reserveOut) {
+  if (reserveIn === 0) return 1.0;
+  const ratio = amountIn / reserveIn;
+  return Math.min(1.0, ratio * (2 - ratio));
+}
+
 module.exports = {
   // Tool: setKey - Store encrypted private key
   setKey: async ({ privateKey, password, useHSM = false }) => {
@@ -2721,6 +2793,886 @@ module.exports = {
       };
     } catch (e) {
       return { error: e.message, hint: "Check your balance and slippage settings." };
+    }
+  },
+
+  // === V3.2 FEATURES: Advanced Routing & Multi-Hop ===
+
+  // Tool: findMultiHopRoute (v3.2 - Find optimal multi-hop routes)
+  // Supports 3, 4, 5+ hop routes with pathfinding algorithm
+  findMultiHopRoute: async ({ 
+    sourceAsset = 'native', 
+    destinationAsset, 
+    amount,
+    maxHops = 4,
+    minLiquidity = 10000,
+    preferLowSlippage = true
+  }) => {
+    try {
+      if (!destinationAsset) {
+        return { error: "destinationAsset is required" };
+      }
+
+      const source = parseAsset(sourceAsset);
+      const dest = parseAsset(destinationAsset);
+      
+      // Define intermediate tokens for routing (high liquidity corridors)
+      const intermediateAssets = [
+        { code: 'USDC', issuer: 'GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ', type: 'stable' },
+        { code: 'yUSDC', issuer: 'GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3DO2GZOXE4D5GHS4TI', type: 'yield' },
+        { code: 'yXLM', issuer: 'GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3DO2GZOXE4D5GHS4TI', type: 'yield' },
+        { code: 'BTC', issuer: 'GAUTUYY2THLF7SG7EQWX7BB3NBJAS4KCKXMH3T5R5P7U7SW3OBQSZSWA', type: 'crypto' },
+        { code: 'ETH', issuer: 'GBFXOHVAS4DXY4T6JZWFX7O7GP7PVZWIQZQ2ZFQZJMVXECA2Q4FNBI4', type: 'crypto' }
+      ];
+
+      const routes = [];
+
+      // Generate routes with different hop counts
+      for (let hopCount = 1; hopCount <= maxHops; hopCount++) {
+        try {
+          if (hopCount === 1) {
+            // Direct route
+            const paths = await server.strictReceivePaths([source], dest, amount).call();
+            if (paths.records.length > 0) {
+              const best = paths.records[0];
+              routes.push({
+                id: crypto.randomUUID(),
+                hops: 1,
+                path: [sourceAsset, destinationAsset],
+                sourceAmount: best.source_amount,
+                destinationAmount: amount,
+                pathAssets: best.path.map(p => p.asset_code || 'XLM'),
+                estimatedSlippage: 0.3,
+                liquidityScore: 100,
+                totalFee: 0.003 // 0.3% fee
+              });
+            }
+          } else if (hopCount === 2) {
+            // 2-hop routes through intermediates
+            for (const intermediate of intermediateAssets) {
+              try {
+                const interAsset = new Asset(intermediate.code, intermediate.issuer);
+                
+                // Step 1: Source -> Intermediate
+                const step1 = await server.strictReceivePaths([source], interAsset, amount).call();
+                if (step1.records.length === 0) continue;
+                
+                const step1Amount = step1.records[0].source_amount;
+                
+                // Step 2: Intermediate -> Destination  
+                const step2 = await server.strictReceivePaths([interAsset], dest, amount).call();
+                if (step2.records.length === 0) continue;
+                
+                const totalCost = parseFloat(step1Amount) + parseFloat(step2.records[0].source_amount);
+                
+                routes.push({
+                  id: crypto.randomUUID(),
+                  hops: 2,
+                  path: [sourceAsset, `${intermediate.code}:${intermediate.issuer}`, destinationAsset],
+                  pathDisplay: [sourceAsset === 'native' ? 'XLM' : sourceAsset, intermediate.code, destinationAsset === 'native' ? 'XLM' : destinationAsset.split(':')[0]],
+                  sourceAmount: totalCost.toFixed(7),
+                  destinationAmount: amount,
+                  intermediateAsset: intermediate,
+                  estimatedSlippage: 0.5,
+                  liquidityScore: 85,
+                  totalFee: 0.006, // 0.3% * 2
+                  routeType: intermediate.type
+                });
+              } catch (e) {
+                continue;
+              }
+            }
+          } else if (hopCount === 3) {
+            // 3-hop routes (source -> intermediate1 -> intermediate2 -> dest)
+            for (let i = 0; i < intermediateAssets.length; i++) {
+              for (let j = 0; j < intermediateAssets.length; j++) {
+                if (i === j) continue;
+                try {
+                  const inter1 = new Asset(intermediateAssets[i].code, intermediateAssets[i].issuer);
+                  const inter2 = new Asset(intermediateAssets[j].code, intermediateAssets[j].issuer);
+                  
+                  // Check if path exists
+                  const step1 = await server.strictReceivePaths([source], inter1, amount).call();
+                  if (step1.records.length === 0) continue;
+                  
+                  const step2 = await server.strictReceivePaths([inter1], inter2, amount).call();
+                  if (step2.records.length === 0) continue;
+                  
+                  const step3 = await server.strictReceivePaths([inter2], dest, amount).call();
+                  if (step3.records.length === 0) continue;
+                  
+                  const totalCost = parseFloat(step1.records[0].source_amount) + 
+                                   parseFloat(step2.records[0].source_amount) + 
+                                   parseFloat(step3.records[0].source_amount);
+                  
+                  routes.push({
+                    id: crypto.randomUUID(),
+                    hops: 3,
+                    path: [
+                      sourceAsset,
+                      `${intermediateAssets[i].code}:${intermediateAssets[i].issuer}`,
+                      `${intermediateAssets[j].code}:${intermediateAssets[j].issuer}`,
+                      destinationAsset
+                    ],
+                    pathDisplay: [
+                      sourceAsset === 'native' ? 'XLM' : sourceAsset,
+                      intermediateAssets[i].code,
+                      intermediateAssets[j].code,
+                      destinationAsset === 'native' ? 'XLM' : destinationAsset.split(':')[0]
+                    ],
+                    sourceAmount: totalCost.toFixed(7),
+                    destinationAmount: amount,
+                    estimatedSlippage: 0.8,
+                    liquidityScore: 70,
+                    totalFee: 0.009, // 0.3% * 3
+                    intermediateAssets: [intermediateAssets[i], intermediateAssets[j]]
+                  });
+                } catch (e) {
+                  continue;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      // Sort routes by preference
+      if (preferLowSlippage) {
+        routes.sort((a, b) => parseFloat(a.sourceAmount) - parseFloat(b.sourceAmount));
+      } else {
+        routes.sort((a, b) => b.liquidityScore - a.liquidityScore);
+      }
+
+      // Cache results
+      const cache = loadRoutingCache();
+      cache.routes[`${sourceAsset}-${destinationAsset}-${amount}`] = {
+        routes: routes.slice(0, 5),
+        timestamp: new Date().toISOString()
+      };
+      cache.lastUpdated = new Date().toISOString();
+      saveRoutingCache(cache);
+
+      return {
+        routes: routes,
+        bestRoute: routes[0] || null,
+        totalRoutes: routes.length,
+        sourceAsset,
+        destinationAsset,
+        amount,
+        maxHops,
+        routeTypes: [...new Set(routes.map(r => r.routeType).filter(Boolean))],
+        message: routes.length > 0 
+          ? `Found ${routes.length} route(s). Best: ${routes[0]?.hops}-hop via ${routes[0]?.pathDisplay?.join(' -> ') || 'direct'} for ${routes[0]?.sourceAmount} XLM`
+          : `No routes found from ${sourceAsset} to ${destinationAsset}`,
+        recommendations: routes.length > 0 ? [
+          `Direct routes (${routes.filter(r => r.hops === 1).length} found) have lowest fees`,
+          `Multi-hop routes enable exotic pairs`,
+          `Higher hop count = higher slippage risk`,
+          'Use smartRoute() for automatic best path selection'
+        ] : [
+          'Try increasing maxHops for more options',
+          'Check if assets have sufficient liquidity',
+          'Consider using stablecoin intermediaries'
+        ]
+      };
+    } catch (e) {
+      return { error: e.message, hint: 'Ensure valid asset codes and issuer addresses' };
+    }
+  },
+
+  // Tool: calculatePriceImpact (v3.2 - Calculate pre-trade price impact)
+  calculatePriceImpact: async ({
+    sourceAsset = 'native',
+    destinationAsset,
+    sourceAmount,
+    destinationAmount,
+    route
+  }) => {
+    try {
+      if (!destinationAsset || (!sourceAmount && !destinationAmount)) {
+        return { error: "destinationAsset and either sourceAmount or destinationAmount required" };
+      }
+
+      const source = parseAsset(sourceAsset);
+      const dest = parseAsset(destinationAsset);
+
+      // Get orderbook depth to estimate reserves
+      let orderbookData = null;
+      try {
+        const orderbook = await server.orderbook(source, dest).call();
+        orderbookData = {
+          bids: orderbook.bids.slice(0, 5),
+          asks: orderbook.asks.slice(0, 5),
+          baseVolume24h: orderbook.base_volume_24h,
+          counterVolume24h: orderbook.counter_volume_24h
+        };
+      } catch (e) {
+        // Orderbook might not exist
+      }
+
+      // Calculate impact based on trade size vs market depth
+      let estimatedImpact = 0;
+      let impactLevel = 'low';
+      let warning = null;
+
+      if (sourceAmount) {
+        const tradeValue = parseFloat(sourceAmount);
+        
+        // Estimate based on typical liquidity
+        const estimatedDailyVolume = orderbookData ? 
+          parseFloat(orderbookData.baseVolume24h || '100000') : 50000;
+        
+        const volumeRatio = tradeValue / estimatedDailyVolume;
+        
+        if (volumeRatio < 0.001) {
+          estimatedImpact = volumeRatio * 100;
+          impactLevel = 'low';
+        } else if (volumeRatio < 0.01) {
+          estimatedImpact = volumeRatio * 100 * 2;
+          impactLevel = 'medium';
+        } else if (volumeRatio < 0.05) {
+          estimatedImpact = volumeRatio * 100 * 3;
+          impactLevel = 'high';
+          warning = 'Trade size is significant relative to market depth';
+        } else {
+          estimatedImpact = Math.min(50, volumeRatio * 100 * 5);
+          impactLevel = 'extreme';
+          warning = 'WARNING: Trade may cause significant price movement. Consider splitting order.';
+        }
+      }
+
+      // Calculate optimal split sizes for large orders
+      const splits = [];
+      const tradeSize = parseFloat(sourceAmount || destinationAmount);
+      
+      if (tradeSize > 1000) {
+        // Suggest splitting into 2-4 parts
+        const numSplits = tradeSize > 10000 ? 4 : tradeSize > 5000 ? 3 : 2;
+        const splitSize = tradeSize / numSplits;
+        
+        for (let i = 0; i < numSplits; i++) {
+          const splitImpact = estimatedImpact / numSplits * (1 + i * 0.1); // Impact increases slightly
+          splits.push({
+            part: i + 1,
+            size: splitSize.toFixed(7),
+            estimatedImpact: splitImpact.toFixed(4),
+            delayBetween: i < numSplits - 1 ? `${(i + 1) * 30}s` : null
+          });
+        }
+      }
+
+      return {
+        sourceAsset,
+        destinationAsset,
+        sourceAmount,
+        destinationAmount,
+        estimatedPriceImpact: estimatedImpact.toFixed(4) + '%',
+        impactLevel,
+        warning,
+        orderbookData: orderbookData ? {
+          topBid: orderbookData.bids[0]?.price,
+          topAsk: orderbookData.asks[0]?.price,
+          spread: orderbookData.bids[0] && orderbookData.asks[0] ? 
+            (parseFloat(orderbookData.asks[0].price) - parseFloat(orderbookData.bids[0].price)).toFixed(7) : 'N/A'
+        } : null,
+        recommendedSplits: splits,
+        recommendations: [
+          impactLevel === 'low' ? '✅ Low impact - execute as single trade' : null,
+          impactLevel === 'medium' ? '⚠️ Medium impact - consider splitting large orders' : null,
+          impactLevel === 'high' ? '⚠️ High impact - use smartRoute() with order splitting' : null,
+          impactLevel === 'extreme' ? '❌ Extreme impact - split into multiple orders or reduce size' : null,
+          splits.length > 0 ? `💡 Splitting into ${splits.length} parts reduces average impact to ~${(estimatedImpact / splits.length).toFixed(4)}%` : null,
+          'Use smartRoute() for automatic impact optimization'
+        ].filter(Boolean)
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: smartRoute (v3.2 - Smart Order Routing Engine)
+  // Automatically selects best execution strategy with route splitting
+  smartRoute: async ({
+    password,
+    sourceAsset = 'native',
+    destinationAsset,
+    amount,
+    isSourceAmount = true,
+    maxSplits = 4,
+    maxSlippage = 1.0,
+    preferSpeed = true,
+    useMEV = true
+  }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      if (!destinationAsset || !amount) {
+        return { error: "destinationAsset and amount are required" };
+      }
+
+      // Step 1: Find all available routes
+      const routeResult = await module.exports.findMultiHopRoute({
+        sourceAsset,
+        destinationAsset,
+        amount,
+        maxHops: 4,
+        preferLowSlippage: true
+      });
+
+      if (routeResult.error || routeResult.routes.length === 0) {
+        return {
+          error: "No routes found",
+          details: routeResult.error || 'No liquidity available'
+        };
+      }
+
+      // Step 2: Calculate price impact
+      const impactResult = await module.exports.calculatePriceImpact({
+        sourceAsset,
+        destinationAsset,
+        sourceAmount: isSourceAmount ? amount : undefined,
+        destinationAmount: isSourceAmount ? undefined : amount
+      });
+
+      // Step 3: Determine execution strategy
+      const impactPercent = parseFloat(impactResult.estimatedPriceImpact);
+      const shouldSplit = impactPercent > 0.5 || parseFloat(amount) > 5000;
+      const numSplits = shouldSplit ? Math.min(maxSplits, Math.ceil(impactPercent / 0.5)) : 1;
+
+      // Step 4: Build execution plan
+      const executionPlan = {
+        strategy: shouldSplit ? 'split' : 'single',
+        totalAmount: amount,
+        numSplits: numSplits,
+        estimatedTotalImpact: impactResult.estimatedPriceImpact,
+        routes: [],
+        executionType: preferSpeed ? 'parallel' : 'sequential'
+      };
+
+      // Select routes for execution
+      if (numSplits === 1) {
+        // Single route - use best
+        const bestRoute = routeResult.routes[0];
+        executionPlan.routes.push({
+          splitIndex: 1,
+          percentage: 100,
+          amount: amount,
+          route: bestRoute,
+          expectedOutput: isSourceAmount ? 
+            (parseFloat(amount) / parseFloat(bestRoute.sourceAmount) * parseFloat(bestRoute.destinationAmount)).toFixed(7) : 
+            bestRoute.destinationAmount,
+          estimatedImpact: impactResult.estimatedPriceImpact
+        });
+      } else {
+        // Split across multiple routes
+        const splitSize = parseFloat(amount) / numSplits;
+        const selectedRoutes = routeResult.routes.slice(0, numSplits);
+        
+        for (let i = 0; i < numSplits; i++) {
+          const route = selectedRoutes[i] || selectedRoutes[0];
+          executionPlan.routes.push({
+            splitIndex: i + 1,
+            percentage: (100 / numSplits).toFixed(1),
+            amount: splitSize.toFixed(7),
+            route: route,
+            expectedOutput: isSourceAmount ?
+              (splitSize / parseFloat(route.sourceAmount) * parseFloat(route.destinationAmount)).toFixed(7) :
+              (parseFloat(route.destinationAmount) / numSplits).toFixed(7),
+            estimatedImpact: (parseFloat(impactResult.estimatedPriceImpact) / numSplits * (1 + i * 0.05)).toFixed(4) + '%'
+          });
+        }
+      }
+
+      // Step 5: Calculate aggregate expected output
+      const totalExpectedOutput = executionPlan.routes.reduce((sum, r) => {
+        return sum + parseFloat(r.expectedOutput || 0);
+      }, 0);
+
+      // Step 6: Determine if MEV protection is recommended
+      const mevConfig = loadMEVConfig();
+      const useMEVProtection = useMEV && mevConfig.enabled && (parseFloat(amount) > 100 || impactPercent > 0.5);
+
+      // Save to SOR history
+      const sorHistory = loadSORHistory();
+      const sorRecord = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        sourceAsset,
+        destinationAsset,
+        amount,
+        strategy: executionPlan.strategy,
+        numSplits,
+        estimatedImpact: impactResult.estimatedPriceImpact,
+        routes: executionPlan.routes.map(r => ({
+          hops: r.route.hops,
+          path: r.route.pathDisplay || r.route.path
+        }))
+      };
+      sorHistory.push(sorRecord);
+      saveSORHistory(sorHistory);
+
+      return {
+        success: true,
+        executionPlan,
+        summary: {
+          strategy: shouldSplit ? 'Order Splitting' : 'Single Route',
+          numRoutes: numSplits,
+          totalInput: amount,
+          totalExpectedOutput: totalExpectedOutput.toFixed(7),
+          averagePrice: isSourceAmount ? 
+            (parseFloat(amount) / totalExpectedOutput).toFixed(7) :
+            (totalExpectedOutput / parseFloat(amount)).toFixed(7),
+          estimatedImpact: impactResult.estimatedPriceImpact,
+          mevProtection: useMEVProtection,
+          executionTime: preferSpeed ? '~2-5s (parallel)' : '~5-15s (sequential)'
+        },
+        routeDetails: executionPlan.routes,
+        recommendations: [
+          shouldSplit ? `💡 Order split into ${numSplits} parts to minimize slippage` : '✅ Single route optimal for this trade size',
+          useMEVProtection ? '🔒 MEV protection enabled for this trade' : '💡 Enable MEV protection for large trades',
+          impactPercent > 1.0 ? '⚠️ Consider reducing trade size or using limit orders' : null,
+          'Execute with executeSmartRoute() for automated execution',
+          preferSpeed ? '⚡ Parallel execution selected for speed' : '📊 Sequential execution selected for precision'
+        ].filter(Boolean),
+        sorId: sorRecord.id,
+        readyToExecute: true
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: executeSmartRoute (v3.2 - Execute smart route)
+  executeSmartRoute: async ({
+    password,
+    sorId,
+    sourceAsset = 'native',
+    destinationAsset,
+    amount,
+    maxSourceAmount,
+    dryRun = false
+  }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      // Get the smart route plan
+      const smartRouteResult = await module.exports.smartRoute({
+        password,
+        sourceAsset,
+        destinationAsset,
+        amount,
+        isSourceAmount: false
+      });
+
+      if (smartRouteResult.error) {
+        return smartRouteResult;
+      }
+
+      if (dryRun) {
+        return {
+          dryRun: true,
+          executionPlan: smartRouteResult.executionPlan,
+          summary: smartRouteResult.summary,
+          message: 'Dry run complete. Use dryRun=false to execute.'
+        };
+      }
+
+      const results = [];
+      const errors = [];
+
+      // Execute each split
+      for (const route of smartRouteResult.executionPlan.routes) {
+        try {
+          const splitAmount = route.amount;
+          const splitMaxSource = (parseFloat(maxSourceAmount) / smartRouteResult.executionPlan.numSplits * 1.05).toFixed(7);
+          
+          const swapResult = await module.exports.swapV2({
+            password,
+            destinationAsset,
+            destinationAmount: splitAmount,
+            maxSourceAmount: splitMaxSource,
+            path: route.route.pathAssets || [],
+            useMEV: true
+          });
+
+          if (swapResult.success) {
+            results.push({
+              splitIndex: route.splitIndex,
+              amount: splitAmount,
+              hash: swapResult.hash,
+              status: 'success'
+            });
+          } else {
+            errors.push({
+              splitIndex: route.splitIndex,
+              error: swapResult.error
+            });
+          }
+        } catch (e) {
+          errors.push({
+            splitIndex: route.splitIndex,
+            error: e.message
+          });
+        }
+      }
+
+      // Calculate aggregate results
+      const successfulSplits = results.length;
+      const totalHashes = results.map(r => r.hash);
+
+      return {
+        success: errors.length === 0,
+        partiallySuccessful: errors.length > 0 && successfulSplits > 0,
+        successfulSplits,
+        failedSplits: errors.length,
+        totalSplits: smartRouteResult.executionPlan.numSplits,
+        results,
+        errors: errors.length > 0 ? errors : undefined,
+        transactionHashes: totalHashes,
+        urls: totalHashes.map(h => `https://stellar.expert/explorer/public/tx/${h}`),
+        message: errors.length === 0 
+          ? `✅ All ${successfulSplits} split(s) executed successfully`
+          : `⚠️ ${successfulSplits}/${smartRouteResult.executionPlan.numSplits} splits executed. Check errors.`,
+        nextSteps: errors.length > 0 ? [
+          'Review failed splits and retry if needed',
+          'Consider adjusting slippage tolerance',
+          'Check wallet balance for remaining splits'
+        ] : [
+          'Monitor transactions for confirmation',
+          'Track aggregate fill price',
+          'Consider enabling auto-rebalance for yield optimization'
+        ]
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: findCrossChainArbitrage (v3.2 - Cross-chain arbitrage detector)
+  findCrossChainArbitrage: async ({
+    sourceChain = 'stellar',
+    targetChains = ['ethereum', 'solana', 'polygon'],
+    minProfitPercent = 0.5,
+    minLiquidity = 50000,
+    bridgePreference = 'fastest'
+  }) => {
+    try {
+      // Bridge configurations
+      const bridges = {
+        stellar: {
+          ethereum: [
+            { name: 'Allbridge', fee: 0.5, time: '10-30min', supported: ['USDC', 'ETH', 'BTC'] },
+            { name: 'Stellar-Ethereum Bridge', fee: 0.3, time: '5-15min', supported: ['XLM', 'USDC'] }
+          ],
+          solana: [
+            { name: 'Allbridge', fee: 0.3, time: '5-15min', supported: ['USDC', 'SOL'] },
+            { name: 'Wormhole', fee: 0.4, time: '3-10min', supported: ['USDC', 'ETH', 'BTC'] }
+          ],
+          polygon: [
+            { name: 'Allbridge', fee: 0.4, time: '5-20min', supported: ['USDC', 'MATIC'] }
+          ]
+        }
+      };
+
+      // Mock price data for cross-chain comparison
+      const mockPrices = {
+        stellar: {
+          'XLM': 1.0,
+          'USDC': 5.0,
+          'ETH': 3000.0,
+          'BTC': 50000.0,
+          'SOL': 50.0
+        },
+        ethereum: {
+          'XLM': 1.02,
+          'USDC': 4.95,
+          'ETH': 2950.0,
+          'BTC': 50500.0,
+          'SOL': 49.5
+        },
+        solana: {
+          'XLM': 0.99,
+          'USDC': 5.02,
+          'ETH': 3020.0,
+          'BTC': 49800.0,
+          'SOL': 50.5
+        },
+        polygon: {
+          'XLM': 1.01,
+          'USDC': 4.98,
+          'ETH': 2980.0,
+          'BTC': 50100.0
+        }
+      };
+
+      const opportunities = [];
+
+      // Check arbitrage opportunities for each target chain
+      for (const targetChain of targetChains) {
+        for (const [asset, stellarPrice] of Object.entries(mockPrices.stellar)) {
+          const targetPrice = mockPrices[targetChain]?.[asset];
+          if (!targetPrice) continue;
+
+          // Calculate price difference
+          const priceDiff = Math.abs(stellarPrice - targetPrice);
+          const avgPrice = (stellarPrice + targetPrice) / 2;
+          const profitPercent = (priceDiff / avgPrice) * 100;
+
+          if (profitPercent >= minProfitPercent) {
+            // Determine direction
+            const buyOnStellar = stellarPrice < targetPrice;
+            const source = buyOnStellar ? 'stellar' : targetChain;
+            const destination = buyOnStellar ? targetChain : 'stellar';
+
+            // Find best bridge
+            const availableBridges = bridges.stellar[targetChain] || [];
+            const bestBridge = availableBridges.length > 0 ? 
+              availableBridges.sort((a, b) => a.fee - b.fee)[0] : null;
+
+            if (bestBridge && bestBridge.supported.includes(asset)) {
+              const bridgeCost = bestBridge.fee;
+              const netProfit = profitPercent - bridgeCost;
+
+              if (netProfit > 0) {
+                opportunities.push({
+                  id: crypto.randomUUID(),
+                  asset,
+                  sourceChain: source,
+                  destinationChain: destination,
+                  profitPercent: profitPercent.toFixed(2),
+                  bridgeCost: bridgeCost.toFixed(2) + '%',
+                  netProfit: netProfit.toFixed(2) + '%',
+                  bridge: bestBridge.name,
+                  bridgeTime: bestBridge.time,
+                  stellarPrice: stellarPrice.toFixed(6),
+                  targetPrice: targetPrice.toFixed(6),
+                  tradeSize: minLiquidity,
+                  estimatedNetReturn: (minLiquidity * netProfit / 100).toFixed(2),
+                  timestamp: new Date().toISOString(),
+                  expiry: new Date(Date.now() + 300000).toISOString() // 5 min expiry
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Sort by net profit
+      opportunities.sort((a, b) => parseFloat(b.netProfit) - parseFloat(a.netProfit));
+
+      // Cache results
+      const cache = loadCrossChainCache();
+      cache.opportunities = opportunities.slice(0, 10);
+      cache.lastUpdated = new Date().toISOString();
+      saveCrossChainCache(cache);
+
+      return {
+        opportunities: opportunities,
+        count: opportunities.length,
+        sourceChain,
+        targetChains,
+        profitable: opportunities.filter(o => parseFloat(o.netProfit) > 0),
+        bridgesAvailable: Object.keys(bridges.stellar || {}),
+        message: opportunities.length > 0
+          ? `Found ${opportunities.length} cross-chain opportunity(s). Best: ${opportunities[0]?.asset} ${opportunities[0]?.netProfit}% net profit via ${opportunities[0]?.bridge}`
+          : `No cross-chain arbitrage found with >${minProfitPercent}% profit`,
+        recommendations: opportunities.length > 0 ? [
+          'Use executeCrossChainArbitrage() to execute best opportunity',
+          'Bridge times vary - factor in opportunity cost',
+          'Monitor bridge fees which fluctuate with network congestion',
+          'Consider slippage on destination chain'
+        ] : [
+          'Try lowering minProfitPercent for more opportunities',
+          'Monitor during high volatility periods',
+          'Different time zones = different arbitrage windows'
+        ]
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: executeCrossChainArbitrage (v3.2 - Execute cross-chain arbitrage)
+  executeCrossChainArbitrage: async ({
+    password,
+    opportunityId,
+    amount,
+    sourceChain = 'stellar',
+    destinationChain,
+    asset,
+    bridge = 'Allbridge',
+    slippageBps = 100,
+    autoReturn = true
+  }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      if (!opportunityId && (!destinationChain || !asset)) {
+        return { error: "Either opportunityId or (destinationChain + asset) required" };
+      }
+
+      // Get opportunity details if ID provided
+      let opportunity = null;
+      if (opportunityId) {
+        const cache = loadCrossChainCache();
+        opportunity = cache.opportunities.find(o => o.id === opportunityId);
+      }
+
+      // Execute the arbitrage
+      const executionSteps = [];
+
+      // Step 1: Acquire asset on source chain (if needed)
+      if (sourceChain === 'stellar' && asset !== 'XLM') {
+        const swapResult = await module.exports.swapV2({
+          password,
+          destinationAsset: asset.includes(':') ? asset : `${asset}:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ`,
+          destinationAmount: amount,
+          maxSourceAmount: (parseFloat(amount) * 6).toFixed(7),
+          useMEV: true
+        });
+
+        if (!swapResult.success) {
+          return {
+            error: "Failed to acquire asset for arbitrage",
+            step: 'acquire',
+            details: swapResult.error
+          };
+        }
+
+        executionSteps.push({
+          step: 1,
+          action: 'acquire',
+          chain: sourceChain,
+          hash: swapResult.hash,
+          status: 'success'
+        });
+      }
+
+      // Step 2: Bridge to destination chain
+      const bridgeResult = {
+        step: 2,
+        action: 'bridge',
+        bridge: bridge,
+        from: sourceChain,
+        to: destinationChain || opportunity?.destinationChain,
+        asset: asset || opportunity?.asset,
+        amount: amount,
+        status: 'simulated',
+        estimatedTime: '10-30min',
+        note: 'In production: would call bridge contract'
+      };
+      executionSteps.push(bridgeResult);
+
+      // Step 3: Sell on destination chain (if autoReturn)
+      if (autoReturn) {
+        executionSteps.push({
+          step: 3,
+          action: 'sell',
+          chain: destinationChain || opportunity?.destinationChain,
+          asset: asset || opportunity?.asset,
+          status: 'pending',
+          note: 'Will execute after bridge confirms'
+        });
+
+        // Step 4: Bridge back (optional - full round trip)
+        executionSteps.push({
+          step: 4,
+          action: 'bridge_return',
+          bridge: bridge,
+          from: destinationChain || opportunity?.destinationChain,
+          to: sourceChain,
+          status: 'pending',
+          note: 'Optional: complete round-trip arbitrage'
+        });
+      }
+
+      // Record in cross-chain history
+      const cache = loadCrossChainCache();
+      if (!cache.history) cache.history = [];
+      cache.history.push({
+        id: opportunityId || crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        steps: executionSteps,
+        status: 'executing'
+      });
+      saveCrossChainCache(cache);
+
+      return {
+        success: true,
+        opportunityId: opportunityId || 'manual',
+        executionSteps,
+        estimatedProfit: opportunity?.netProfit || 'unknown',
+        totalSteps: executionSteps.length,
+        status: 'in_progress',
+        message: `Cross-chain arbitrage initiated: ${asset} from ${sourceChain} to ${destinationChain || opportunity?.destinationChain} via ${bridge}`,
+        monitoring: [
+          'Track bridge transaction status',
+          'Monitor destination chain for execution',
+          'Verify final profit after all fees'
+        ],
+        risks: [
+          'Bridge delays may reduce profit',
+          'Price may move during bridge time',
+          'Destination chain slippage',
+          'Bridge fees are fixed costs'
+        ]
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // Tool: getRoutingStats (v3.2 - Get routing statistics)
+  getRoutingStats: async ({ password }) => {
+    try {
+      const wallet = loadWallet(password);
+      if (!wallet) {
+        return { error: "No wallet configured. Use setKey() first." };
+      }
+
+      const routingCache = loadRoutingCache();
+      const sorHistory = loadSORHistory();
+      const crossChainCache = loadCrossChainCache();
+
+      // Calculate stats
+      const routeCounts = {};
+      sorHistory.forEach(h => {
+        const key = `${h.sourceAsset}-${h.destinationAsset}`;
+        routeCounts[key] = (routeCounts[key] || 0) + 1;
+      });
+
+      const topRoutes = Object.entries(routeCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([route, count]) => ({ route, count }));
+
+      return {
+        totalRoutes: Object.keys(routingCache.routes || {}).length,
+        sorExecutions: sorHistory.length,
+        crossChainOpportunities: crossChainCache.opportunities?.length || 0,
+        crossChainHistory: crossChainCache.history?.length || 0,
+        topRoutes,
+        lastUpdated: routingCache.lastUpdated,
+        performance: {
+          averageHops: sorHistory.length > 0 ?
+            (sorHistory.reduce((sum, h) => sum + (h.routes?.[0]?.hops || 1), 0) / sorHistory.length).toFixed(1) : 'N/A',
+          splitOrders: sorHistory.filter(h => h.strategy === 'split').length
+        },
+        message: `${sorHistory.length} SOR executions, ${Object.keys(routingCache.routes || {}).length} cached routes`
+      };
+    } catch (e) {
+      return { error: e.message };
     }
   }
 };

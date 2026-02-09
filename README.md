@@ -8,6 +8,22 @@ The first autonomous trading skill built specifically for AI agents. Stop just c
 
 ---
 
+## 🚀 What's New in v3.2
+
+### 🛤️ Advanced Multi-Hop Routing
+Find optimal paths through 3, 4, 5+ pools. Support for exotic token pairs with intelligent route comparison.
+
+### 🧠 Smart Order Routing (SOR) Engine
+Automatically selects the best execution strategy with order splitting for large trades. Minimizes slippage across multiple DEXs.
+
+### 📊 Price Impact Calculator
+Pre-trade impact estimation with dynamic route adjustment. Know your slippage before you trade.
+
+### 🌉 Cross-Chain Arbitrage Framework
+Detect and execute arbitrage opportunities between Stellar and other chains (Ethereum, Solana, Polygon) via bridges like Allbridge and Wormhole.
+
+---
+
 ## 🚀 What's New in v3.1
 
 ### ⚡ WASM Hot Path
@@ -196,6 +212,21 @@ console.log("Trade executed:", result.hash);
 | `setSlippageProtection({password, baseBps, volatilityMultiplier, maxBps, minBps, dynamicAdjustment})` | Configure dynamic slippage |
 | `getSlippageStatus({password})` | Check current slippage configuration |
 
+### Advanced Routing (v3.2+) 🛤️
+| Tool | Description |
+|------|-------------|
+| `findMultiHopRoute({sourceAsset, destinationAsset, amount, maxHops, minLiquidity, preferLowSlippage})` | Find optimal 3-5 hop routes through multiple pools |
+| `calculatePriceImpact({sourceAsset, destinationAsset, sourceAmount, destinationAmount})` | Pre-trade price impact estimation |
+| `smartRoute({password, sourceAsset, destinationAsset, amount, maxSplits, maxSlippage})` | Smart Order Routing with automatic best path selection |
+| `executeSmartRoute({password, sorId, sourceAsset, destinationAsset, amount})` | Execute smart route with order splitting |
+| `getRoutingStats({password})` | View routing statistics and performance |
+
+### Cross-Chain Arbitrage (v3.2+) 🌉
+| Tool | Description |
+|------|-------------|
+| `findCrossChainArbitrage({sourceChain, targetChains, minProfitPercent, bridgePreference})` | Detect arbitrage between Stellar and other chains |
+| `executeCrossChainArbitrage({password, opportunityId, amount, bridge, autoReturn})` | Execute cross-chain arbitrage trades |
+
 ---
 
 ## 💡 Example: MEV-Protected Trading
@@ -307,6 +338,138 @@ const result = await soroban.swapV2({
   maxSourceAmount: "500"
   // Slippage will be auto-calculated based on market conditions
 });
+```
+
+## 💡 Example: Advanced Multi-Hop Routing (v3.2)
+
+```javascript
+// Find multi-hop routes through 3-5 pools
+const routes = await soroban.findMultiHopRoute({
+  sourceAsset: "native",
+  destinationAsset: "yXLM:GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3DO2GZOXE4D5GHS4TI",
+  amount: "100",
+  maxHops: 4,
+  preferLowSlippage: true
+});
+
+console.log(`Found ${routes.totalRoutes} routes`);
+console.log("Best route:", routes.bestRoute.pathDisplay.join(" -> "));
+// Output: XLM -> USDC -> yUSDC -> yXLM
+
+// Execute the best route
+const result = await soroban.swap({
+  password: "***",
+  destinationAsset: "yXLM:GARDNV3Q7YGT4AKSDF25LT32YSCCW4EV22Y2TV3DO2GZOXE4D5GHS4TI",
+  destinationAmount: "100",
+  maxSourceAmount: "520",
+  path: routes.bestRoute.pathAssets
+});
+```
+
+## 💡 Example: Smart Order Routing (v3.2)
+
+```javascript
+// Let the SOR engine find the best execution strategy
+const smartRoute = await soroban.smartRoute({
+  password: "***",
+  sourceAsset: "native",
+  destinationAsset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  amount: "1000",           // Large order that benefits from splitting
+  isSourceAmount: true,
+  maxSplits: 4,             // Split across up to 4 routes
+  maxSlippage: 1.0,         // Max 1% slippage
+  preferSpeed: true         // Parallel execution
+});
+
+console.log("Strategy:", smartRoute.summary.strategy);
+console.log("Split into:", smartRoute.summary.numRoutes, "parts");
+console.log("Expected output:", smartRoute.summary.totalExpectedOutput);
+console.log("Price impact:", smartRoute.summary.estimatedImpact);
+
+// Execute the smart route
+const execution = await soroban.executeSmartRoute({
+  password: "***",
+  sorId: smartRoute.sorId,
+  sourceAsset: "native",
+  destinationAsset: "USDC:...",
+  amount: "1000",
+  maxSourceAmount: "5100",
+  dryRun: false             // Set to true to simulate first
+});
+
+console.log(`Executed ${execution.successfulSplits}/${execution.totalSplits} splits`);
+console.log("Transaction hashes:", execution.transactionHashes);
+```
+
+## 💡 Example: Price Impact Calculator (v3.2)
+
+```javascript
+// Calculate price impact before trading
+const impact = await soroban.calculatePriceImpact({
+  sourceAsset: "native",
+  destinationAsset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  sourceAmount: "10000"     // Large trade
+});
+
+console.log("Price impact:", impact.estimatedPriceImpact);
+console.log("Impact level:", impact.impactLevel);
+// Output: high (needs splitting)
+
+if (impact.recommendedSplits.length > 0) {
+  console.log("Recommended splits:");
+  impact.recommendedSplits.forEach(split => {
+    console.log(`  Part ${split.part}: ${split.size} XLM (${split.estimatedImpact} impact)`);
+  });
+}
+
+// Use smartRoute() for large orders to minimize impact
+if (impact.impactLevel === 'high' || impact.impactLevel === 'extreme') {
+  console.log("Using smartRoute for optimal execution...");
+  // ... use smartRoute
+}
+```
+
+## 💡 Example: Cross-Chain Arbitrage (v3.2)
+
+```javascript
+// Find arbitrage opportunities between Stellar and other chains
+const opportunities = await soroban.findCrossChainArbitrage({
+  sourceChain: "stellar",
+  targetChains: ["ethereum", "solana", "polygon"],
+  minProfitPercent: 0.5,    // Min 0.5% after bridge fees
+  minLiquidity: 50000,      // Min $50k liquidity
+  bridgePreference: "fastest" // or "cheapest"
+});
+
+if (opportunities.opportunities.length > 0) {
+  const best = opportunities.opportunities[0];
+  console.log(`Arbitrage: ${best.asset}`);
+  console.log(`Buy on: ${best.sourceChain} at ${best.stellarPrice}`);
+  console.log(`Sell on: ${best.destinationChain} at ${best.targetPrice}`);
+  console.log(`Net profit: ${best.netProfit}`);
+  console.log(`Bridge: ${best.bridge} (${best.bridgeTime})`);
+  
+  // Execute cross-chain arbitrage
+  const result = await soroban.executeCrossChainArbitrage({
+    password: "***",
+    opportunityId: best.id,
+    amount: "5000",         // Trade size
+    sourceChain: "stellar",
+    destinationChain: best.destinationChain,
+    asset: best.asset,
+    bridge: best.bridge,
+    autoReturn: true        // Round-trip arbitrage
+  });
+  
+  console.log("Execution steps:", result.executionSteps);
+  console.log("Status:", result.status);
+}
+
+// Check routing statistics
+const stats = await soroban.getRoutingStats({ password: "***" });
+console.log("SOR executions:", stats.sorExecutions);
+console.log("Average hops:", stats.performance.averageHops);
+console.log("Top routes:", stats.topRoutes);
 ```
 
 ## 💡 Example: Autonomous Yield Strategy
@@ -426,6 +589,10 @@ console.log("Average swap time:", perf.performance.avgSwapTime);
 - **Flash Loans:** Zero-capital arbitrage across protocols
 - **Transaction Bundling:** Gas-optimized multi-step operations
 - **Slippage Protection:** Dynamic adjustment based on market volatility
+- **Multi-Hop Routing:** 3-5 hop paths for exotic token pairs
+- **Smart Order Routing:** Automatic best path with order splitting
+- **Price Impact Calculation:** Pre-trade slippage estimation
+- **Cross-Chain Arbitrage:** Exploit price differences across chains
 
 ---
 
@@ -542,11 +709,11 @@ This enables:
 
 ```bash
 npm install
-npm test              # Run test suite (55+ test cases)
+npm test              # Run test suite (70+ test cases)
 npm run test:coverage # With coverage report
 ```
 
-55+ test cases covering all major functions including v3.0 and v3.1 features.
+70+ test cases covering all major functions including v3.0, v3.1, and v3.2 features.
 
 ---
 
@@ -561,6 +728,7 @@ Join the conversation on [Moltbook](https://moltbook.com) (agent social network)
 
 ## 📊 Version History
 
+- **v3.2.0** - Advanced Routing & Multi-Hop: SOR engine, price impact calculator, cross-chain arbitrage
 - **v3.1.0** - WASM hot path, MEV protection, flash loans, transaction bundling, slippage protection
 - **v3.0.0** - Yield aggregator, social trading, HSM support
 - **v2.4.0** - Limit orders

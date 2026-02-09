@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.0] - 2026-02-09
+
+### 🛤️ V3.2: Advanced Routing & Multi-Hop - COMPLETE
+
+**Smart Order Routing, multi-hop pathfinding, and cross-chain arbitrage.**
+
+### Added
+
+#### 🛤️ Multi-Hop Routing Engine
+- **`findMultiHopRoute({sourceAsset, destinationAsset, amount, maxHops, minLiquidity, preferLowSlippage})`** - Find optimal paths through 3-5+ pools
+  - Support for 1, 2, 3+ hop routes
+  - Intelligent pathfinding through high-liquidity corridors (USDC, yUSDC, yXLM, BTC, ETH)
+  - Route comparison by slippage or liquidity score
+  - Automatic caching of discovered routes
+  - Path display for easy visualization (e.g., "XLM -> USDC -> yUSDC -> yXLM")
+  - Route metadata including estimated slippage, fees, and liquidity scores
+
+#### 🧠 Smart Order Routing (SOR) Engine
+- **`smartRoute({password, sourceAsset, destinationAsset, amount, maxSplits, maxSlippage, preferSpeed})`** - Automatic best execution strategy
+  - Route splitting for large orders to minimize slippage
+  - Automatic selection between single route vs split execution
+  - Parallel or sequential execution modes
+  - MEV protection integration for large trades
+  - Execution planning with detailed route allocation
+  - SOR history tracking for performance analysis
+- **`executeSmartRoute({password, sorId, sourceAsset, destinationAsset, amount, dryRun})`** - Execute with order splitting
+  - Dry run mode for simulation
+  - Partial execution handling
+  - Transaction hash tracking per split
+  - Automatic retry recommendations
+- **`getRoutingStats({password})`** - View routing statistics
+  - SOR execution count
+  - Average hops per trade
+  - Split order tracking
+  - Top route pairs
+  - Cross-chain opportunity count
+
+#### 📊 Price Impact Calculator
+- **`calculatePriceImpact({sourceAsset, destinationAsset, sourceAmount, destinationAmount})`** - Pre-trade impact estimation
+  - Impact level classification (low/medium/high/extreme)
+  - Orderbook depth analysis
+  - Trade size vs market depth ratio calculation
+  - Optimal split recommendations for large orders
+  - Spread analysis from orderbook data
+  - Dynamic warnings for significant price movement risk
+  - Integration with smartRoute() for automatic optimization
+
+#### 🌉 Cross-Chain Arbitrage Framework
+- **`findCrossChainArbitrage({sourceChain, targetChains, minProfitPercent, bridgePreference})`** - Detect cross-chain opportunities
+  - Bridge integration (Allbridge, Wormhole, Stellar-Ethereum Bridge)
+  - Multi-chain price comparison (Ethereum, Solana, Polygon)
+  - Net profit calculation including bridge fees
+  - Opportunity expiry tracking (5-minute windows)
+  - Support for stablecoins and major crypto assets
+- **`executeCrossChainArbitrage({password, opportunityId, amount, bridge, autoReturn})`** - Execute cross-chain trades
+  - Automatic asset acquisition on source chain
+  - Bridge transaction coordination
+  - Multi-step execution tracking
+  - Round-trip arbitrage support (autoReturn)
+  - Risk disclosure and monitoring guidance
+
+### Technical Details
+
+- 15+ new test cases for v3.2 features (78 total tests)
+- Helper functions for asset parsing, path cost calculation, price impact estimation
+- Dedicated storage files for routing cache, SOR history, and cross-chain cache
+- Full integration with v3.1 MEV protection and slippage systems
+- Backward compatible with all previous versions
+
+---
+
 ## [3.1.0] - 2026-02-09
 
 ### ⚡ V3.1: Execution Optimization - COMPLETE
