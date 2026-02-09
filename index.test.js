@@ -11,7 +11,14 @@ const TEST_PRIVATE_KEY = 'SC7M55MJVWHVGKAGAYGFOWKAKB3NKCNDJKGMAOB25RLCFXKDFVA6CD
 // Test utilities
 function cleanupTestData() {
   const walletDir = path.join(process.env.HOME || '/root', '.config', 'soroban');
-  const files = ['wallet.json', 'stoplosses.json', 'takeprofits.json', 'dca.json', 'alerts.json', 'yield_strategy.json', 'followed_traders.json', 'copy_trades.json'];
+  const files = [
+    'wallet.json', 'stoplosses.json', 'takeprofits.json', 'dca.json', 'alerts.json',
+    'yield_strategy.json', 'followed_traders.json', 'copy_trades.json',
+    'mev_config.json', 'slippage_config.json', 'flash_loan_history.json', 'bundle_history.json',
+    'routing_cache.json', 'cross_chain_cache.json', 'sor_history.json',
+    'portfolio_config.json', 'portfolio_history.json', 'correlation_cache.json',
+    'tax_loss_harvest.json', 'performance_attribution.json', 'sharpe_optimization.json'
+  ];
   files.forEach(f => {
     try { fs.unlinkSync(path.join(walletDir, f)); } catch (e) {}
   });
@@ -453,69 +460,67 @@ describe('Soroban Trader Skill', () => {
     });
   });
 
-  // === V3.1 FEATURES: Execution & MEV Protection ===
-  describe('MEV Protection (v3.1)', () => {
+  // === V3.1 FEATURES: Execution & Slippage Protection ===
+  describe('Slippage Protection (v3.1)', () => {
     beforeEach(async () => {
       cleanupTestData();
       await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
     });
 
-    test('setMEVProtection should enable MEV protection', async () => {
-      const result = await soroban.setMEVProtection({
+    test('setSlippageProtection should configure slippage settings', async () => {
+      const result = await soroban.setSlippageProtection({
         password: TEST_PASSWORD,
-        enabled: true,
-        privateMempool: true,
-        sandwichProtection: true,
-        frontRunProtection: true,
-        backRunProtection: true,
-        maxPriorityFee: 100
+        baseBps: 50,
+        volatilityMultiplier: 2.0,
+        maxBps: 500,
+        minBps: 10,
+        dynamicAdjustment: true
       });
 
       expect(result.success).toBe(true);
-      expect(result.config.enabled).toBe(true);
-      expect(result.protectionLevel).toBe('MAXIMUM');
-      expect(result.config.privateMempool).toBe(true);
-      expect(result.config.sandwichProtection).toBe(true);
+      expect(result.config.baseBps).toBe(50);
+      expect(result.config.volatilityMultiplier).toBe(2.0);
+      expect(result.dynamic).toBe(true);
     });
 
-    test('setMEVProtection should disable MEV protection', async () => {
-      const result = await soroban.setMEVProtection({
+    test('setSlippageProtection should validate parameters', async () => {
+      const result = await soroban.setSlippageProtection({
         password: TEST_PASSWORD,
-        enabled: false
+        baseBps: 1000, // Above max
+        maxBps: 500,
+        minBps: 10
       });
 
-      expect(result.success).toBe(true);
-      expect(result.config.enabled).toBe(false);
-      expect(result.protectionLevel).toBe('NONE');
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('baseBps');
     });
 
-    test('setMEVProtection should require wallet', async () => {
-      const result = await soroban.setMEVProtection({
+    test('setSlippageProtection should require wallet', async () => {
+      const result = await soroban.setSlippageProtection({
         password: 'wrong-password',
-        enabled: true
+        baseBps: 50
       });
 
       expect(result.error).toBeDefined();
       expect(result.error).toContain('No wallet configured');
     });
 
-    test('getMEVStatus should return MEV configuration', async () => {
-      await soroban.setMEVProtection({
+    test('getSlippageStatus should return slippage configuration', async () => {
+      await soroban.setSlippageProtection({
         password: TEST_PASSWORD,
-        enabled: true,
-        privateMempool: true
+        baseBps: 50,
+        dynamicAdjustment: true
       });
 
-      const result = await soroban.getMEVStatus({ password: TEST_PASSWORD });
+      const result = await soroban.getSlippageStatus({ password: TEST_PASSWORD });
 
       expect(result.configured).toBe(true);
       expect(result.config).toBeDefined();
-      expect(result.protectionLevel).toBeDefined();
-      expect(result.features).toBeDefined();
+      expect(result.currentSlippageBps).toBeDefined();
     });
 
-    test('getMEVStatus should require wallet', async () => {
-      const result = await soroban.getMEVStatus({ password: 'wrong-password' });
+    test('getSlippageStatus should require wallet', async () => {
+      const result = await soroban.getSlippageStatus({ password: 'wrong-password' });
       expect(result.error).toBeDefined();
     });
   });
@@ -1074,5 +1079,556 @@ describe('Soroban Trader Skill', () => {
       expect(bridgeStep).toBeDefined();
       expect(bridgeStep.bridge).toBe('Allbridge');
     }, 30000);
+  });
+
+  describe('Portfolio Management (v3.3)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    // setRebalancingStrategy Tests
+    test('setRebalancingStrategy should configure portfolio targets', async () => {
+      const result = await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: {
+          'XLM': 50,
+          'USDC': 30,
+          'yXLM': 20
+        },
+        driftThreshold: 5,
+        autoRebalance: true,
+        strategy: 'balanced'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.strategy).toBe('balanced');
+      expect(result.driftThreshold).toBe('5%');
+      expect(result.autoRebalance).toBe(true);
+      expect(result.targetAllocations).toEqual({
+        'XLM': 50,
+        'USDC': 30,
+        'yXLM': 20
+      });
+    });
+
+    test('setRebalancingStrategy should reject allocations not summing to 100%', async () => {
+      const result = await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: {
+          'XLM': 40,
+          'USDC': 30
+        },
+        driftThreshold: 5
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('100%');
+    });
+
+    test('setRebalancingStrategy should validate strategy type', async () => {
+      const result = await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: { 'XLM': 100 },
+        strategy: 'invalid-strategy'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Invalid strategy');
+    });
+
+    test('setRebalancingStrategy should validate drift threshold', async () => {
+      const result = await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: { 'XLM': 100 },
+        driftThreshold: 100
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('driftThreshold');
+    });
+
+    test('setRebalancingStrategy should require wallet', async () => {
+      const result = await soroban.setRebalancingStrategy({
+        password: 'wrong-password',
+        targetAllocations: { 'XLM': 100 }
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // getPortfolioAllocation Tests
+    test('getPortfolioAllocation should return current allocation', async () => {
+      const result = await soroban.getPortfolioAllocation({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('totalValue');
+      expect(result).toHaveProperty('currentAllocations');
+      expect(result).toHaveProperty('drift');
+      expect(result).toHaveProperty('needsRebalancing');
+      expect(result).toHaveProperty('driftThreshold');
+    });
+
+    test('getPortfolioAllocation should include history when requested', async () => {
+      const result = await soroban.getPortfolioAllocation({
+        password: TEST_PASSWORD,
+        includeHistory: true
+      });
+
+      expect(result).toHaveProperty('rebalanceHistory');
+      expect(Array.isArray(result.rebalanceHistory)).toBe(true);
+    });
+
+    test('getPortfolioAllocation should require wallet', async () => {
+      const result = await soroban.getPortfolioAllocation({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // autoRebalancePortfolio Tests
+    test('autoRebalancePortfolio should require strategy configuration', async () => {
+      const result = await soroban.autoRebalancePortfolio({
+        password: TEST_PASSWORD
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No rebalancing strategy');
+    });
+
+    test('autoRebalancePortfolio should support dryRun', async () => {
+      // First set up strategy
+      await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: { 'XLM': 100 },
+        driftThreshold: 1,
+        autoRebalance: false
+      });
+
+      const result = await soroban.autoRebalancePortfolio({
+        password: TEST_PASSWORD,
+        dryRun: true,
+        force: true
+      });
+
+      expect(result.dryRun).toBe(true);
+      expect(result).toHaveProperty('wouldRebalance');
+      expect(result).toHaveProperty('tradesNeeded');
+    });
+
+    test('autoRebalancePortfolio should respect drift threshold', async () => {
+      await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: { 'XLM': 100 },
+        driftThreshold: 50,  // Very high threshold
+        autoRebalance: false
+      });
+
+      const result = await soroban.autoRebalancePortfolio({
+        password: TEST_PASSWORD,
+        force: false  // Don't force, respect threshold
+      });
+
+      expect(result.rebalanced).toBe(false);
+      expect(result.reason).toContain('threshold');
+    });
+
+    test('autoRebalancePortfolio should force rebalance when requested', async () => {
+      await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: { 'XLM': 100 },
+        driftThreshold: 0.1,
+        autoRebalance: false
+      });
+
+      const result = await soroban.autoRebalancePortfolio({
+        password: TEST_PASSWORD,
+        dryRun: true,
+        force: true
+      });
+
+      // Should proceed despite drift
+      expect(result.dryRun).toBe(true);
+    });
+
+    // analyzeCorrelations Tests
+    test('analyzeCorrelations should return correlation matrix', async () => {
+      const result = await soroban.analyzeCorrelations({
+        assets: ['XLM', 'USDC', 'yXLM'],
+        lookbackDays: 30
+      });
+
+      expect(result).toHaveProperty('assets');
+      expect(result.assets).toEqual(['XLM', 'USDC', 'yXLM']);
+      expect(result).toHaveProperty('correlationMatrix');
+      expect(Array.isArray(result.correlationMatrix)).toBe(true);
+      expect(result).toHaveProperty('diversificationScore');
+      expect(result).toHaveProperty('riskLevel');
+    });
+
+    test('analyzeCorrelations should identify high correlations', async () => {
+      const result = await soroban.analyzeCorrelations({
+        assets: ['XLM', 'yXLM', 'USDC', 'yUSDC'],  // Pairs that are highly correlated
+        lookbackDays: 30
+      });
+
+      expect(result).toHaveProperty('highCorrelations');
+      expect(Array.isArray(result.highCorrelations)).toBe(true);
+      expect(result).toHaveProperty('diversificationOpportunities');
+    });
+
+    test('analyzeCorrelations should require at least 2 assets', async () => {
+      const result = await soroban.analyzeCorrelations({
+        assets: ['XLM'],
+        lookbackDays: 30
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('2 assets');
+    });
+
+    test('analyzeCorrelations should cache results', async () => {
+      await soroban.analyzeCorrelations({
+        assets: ['XLM', 'USDC'],
+        lookbackDays: 30
+      });
+
+      // Correlations should be cached
+      const result2 = await soroban.analyzeCorrelations({
+        assets: ['XLM', 'USDC'],
+        lookbackDays: 30
+      });
+
+      expect(result2).toHaveProperty('lastUpdated');
+    });
+
+    // findTaxLossOpportunities Tests
+    test('findTaxLossOpportunities should scan for tax losses', async () => {
+      const result = await soroban.findTaxLossOpportunities({
+        password: TEST_PASSWORD,
+        minLossPercent: 5
+      });
+
+      expect(result).toHaveProperty('opportunities');
+      expect(Array.isArray(result.opportunities)).toBe(true);
+      expect(result).toHaveProperty('count');
+      expect(result).toHaveProperty('taxYear');
+      expect(result).toHaveProperty('deadline');
+    });
+
+    test('findTaxLossOpportunities should calculate tax savings', async () => {
+      const result = await soroban.findTaxLossOpportunities({
+        password: TEST_PASSWORD,
+        minLossPercent: 1  // Low threshold to find opportunities
+      });
+
+      expect(result).toHaveProperty('totalUnrealizedLoss');
+      expect(result).toHaveProperty('estimatedTaxSavings');
+      
+      if (result.opportunities.length > 0) {
+        const opp = result.opportunities[0];
+        expect(opp).toHaveProperty('unrealizedLoss');
+        expect(opp).toHaveProperty('taxSavingsEstimate');
+        expect(opp).toHaveProperty('equivalentAsset');
+        expect(opp).toHaveProperty('washSaleRisk');
+      }
+    });
+
+    test('findTaxLossOpportunities should require wallet', async () => {
+      const result = await soroban.findTaxLossOpportunities({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // executeTaxLossHarvest Tests
+    test('executeTaxLossHarvest should require valid opportunity', async () => {
+      const result = await soroban.executeTaxLossHarvest({
+        password: TEST_PASSWORD,
+        opportunityId: 'invalid-id'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('not found');
+    });
+
+    test('executeTaxLossHarvest should support dryRun', async () => {
+      // First find opportunities to populate cache
+      await soroban.findTaxLossOpportunities({
+        password: TEST_PASSWORD,
+        minLossPercent: 1
+      });
+
+      // Get opportunity from cache
+      const fs = require('fs');
+      const path = require('path');
+      const walletDir = path.join(process.env.HOME || '/root', '.config', 'soroban');
+      const taxData = JSON.parse(fs.readFileSync(path.join(walletDir, 'tax_loss_harvest.json'), 'utf8'));
+      
+      if (taxData.opportunities.length > 0) {
+        const result = await soroban.executeTaxLossHarvest({
+          password: TEST_PASSWORD,
+          opportunityId: taxData.opportunities[0].id,
+          dryRun: true
+        });
+
+        expect(result.dryRun).toBe(true);
+        expect(result).toHaveProperty('opportunity');
+        expect(result).toHaveProperty('steps');
+      }
+    });
+
+    test('executeTaxLossHarvest should record harvested losses', async () => {
+      await soroban.findTaxLossOpportunities({
+        password: TEST_PASSWORD,
+        minLossPercent: 1
+      });
+
+      const fs = require('fs');
+      const path = require('path');
+      const walletDir = path.join(process.env.HOME || '/root', '.config', 'soroban');
+      const taxDataBefore = JSON.parse(fs.readFileSync(path.join(walletDir, 'tax_loss_harvest.json'), 'utf8'));
+      
+      if (taxDataBefore.opportunities.length > 0) {
+        const result = await soroban.executeTaxLossHarvest({
+          password: TEST_PASSWORD,
+          opportunityId: taxDataBefore.opportunities[0].id,
+          autoSwapToEquivalent: true,
+          dryRun: false
+        });
+
+        expect(result.success).toBe(true);
+        expect(result).toHaveProperty('harvestRecord');
+        expect(result).toHaveProperty('realizedLoss');
+        expect(result).toHaveProperty('taxSavingsEstimate');
+        expect(result).toHaveProperty('warnings');
+      }
+    });
+
+    // getPerformanceAttribution Tests
+    test('getPerformanceAttribution should analyze portfolio performance', async () => {
+      const result = await soroban.getPerformanceAttribution({
+        password: TEST_PASSWORD,
+        period: '30d',
+        benchmark: 'XLM'
+      });
+
+      expect(result).toHaveProperty('period');
+      expect(result.period).toBe('30d');
+      expect(result).toHaveProperty('portfolioReturn');
+      expect(result).toHaveProperty('benchmark');
+      expect(result).toHaveProperty('alpha');
+      expect(result).toHaveProperty('attribution');
+    });
+
+    test('getPerformanceAttribution should identify contributors and detractors', async () => {
+      const result = await soroban.getPerformanceAttribution({
+        password: TEST_PASSWORD,
+        period: '30d'
+      });
+
+      expect(result).toHaveProperty('attribution');
+      expect(result.attribution).toHaveProperty('topContributors');
+      expect(result.attribution).toHaveProperty('topDetractors');
+      expect(Array.isArray(result.attribution.topContributors)).toBe(true);
+      expect(Array.isArray(result.attribution.topDetractors)).toBe(true);
+    });
+
+    test('getPerformanceAttribution should record history', async () => {
+      await soroban.getPerformanceAttribution({
+        password: TEST_PASSWORD,
+        period: '30d'
+      });
+
+      // Should save to history
+      const fs = require('fs');
+      const path = require('path');
+      const walletDir = path.join(process.env.HOME || '/root', '.config', 'soroban');
+      const attrFile = path.join(walletDir, 'performance_attribution.json');
+      
+      if (fs.existsSync(attrFile)) {
+        const data = JSON.parse(fs.readFileSync(attrFile, 'utf8'));
+        expect(data).toHaveProperty('history');
+        expect(data.history.length).toBeGreaterThan(0);
+      }
+    });
+
+    test('getPerformanceAttribution should require wallet', async () => {
+      const result = await soroban.getPerformanceAttribution({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // optimizeSharpeRatio Tests
+    test('optimizeSharpeRatio should calculate current Sharpe ratio', async () => {
+      const result = await soroban.optimizeSharpeRatio({
+        password: TEST_PASSWORD,
+        targetSharpe: 2.0
+      });
+
+      expect(result).toHaveProperty('currentSharpe');
+      expect(result).toHaveProperty('targetSharpe');
+      expect(result.targetSharpe).toBe(2.0);
+      expect(result).toHaveProperty('gap');
+      expect(result).toHaveProperty('status');
+      expect(['OPTIMAL', 'NEAR_OPTIMAL', 'NEEDS_IMPROVEMENT']).toContain(result.status);
+    });
+
+    test('optimizeSharpeRatio should provide recommendations', async () => {
+      const result = await soroban.optimizeSharpeRatio({
+        password: TEST_PASSWORD,
+        targetSharpe: 2.0,
+        maxPositions: 6
+      });
+
+      expect(result).toHaveProperty('recommendations');
+      expect(Array.isArray(result.recommendations)).toBe(true);
+      expect(result).toHaveProperty('assetAnalysis');
+      expect(Array.isArray(result.assetAnalysis)).toBe(true);
+    });
+
+    test('optimizeSharpeRatio should suggest optimized allocation', async () => {
+      const result = await soroban.optimizeSharpeRatio({
+        password: TEST_PASSWORD,
+        targetSharpe: 2.0
+      });
+
+      expect(result).toHaveProperty('optimizedAllocation');
+      const total = Object.values(result.optimizedAllocation)
+        .reduce((sum, val) => sum + val, 0);
+      expect(total).toBe(100);
+    });
+
+    test('optimizeSharpeRatio should save optimization history', async () => {
+      await soroban.optimizeSharpeRatio({
+        password: TEST_PASSWORD,
+        targetSharpe: 2.0
+      });
+
+      const fs = require('fs');
+      const path = require('path');
+      const walletDir = path.join(process.env.HOME || '/root', '.config', 'soroban');
+      const sharpeFile = path.join(walletDir, 'sharpe_optimization.json');
+      
+      if (fs.existsSync(sharpeFile)) {
+        const data = JSON.parse(fs.readFileSync(sharpeFile, 'utf8'));
+        expect(data).toHaveProperty('lastOptimized');
+        expect(data).toHaveProperty('optimizationHistory');
+      }
+    });
+
+    test('optimizeSharpeRatio should require wallet', async () => {
+      const result = await soroban.optimizeSharpeRatio({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // getPortfolioSummary Tests
+    test('getPortfolioSummary should return comprehensive overview', async () => {
+      const result = await soroban.getPortfolioSummary({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('overview');
+      expect(result.overview).toHaveProperty('totalValue');
+      expect(result.overview).toHaveProperty('assetCount');
+      expect(result.overview).toHaveProperty('currentSharpe');
+
+      expect(result).toHaveProperty('allocation');
+      expect(result.allocation).toHaveProperty('current');
+      expect(result.allocation).toHaveProperty('needsRebalancing');
+
+      expect(result).toHaveProperty('performance');
+      expect(result).toHaveProperty('risk');
+      expect(result).toHaveProperty('tax');
+      expect(result).toHaveProperty('recommendations');
+    });
+
+    test('getPortfolioSummary should require wallet', async () => {
+      const result = await soroban.getPortfolioSummary({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // Integration Tests
+    test('portfolio workflow: set strategy, check allocation, rebalance', async () => {
+      // 1. Set rebalancing strategy
+      const strategy = await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: { 'XLM': 100 },
+        driftThreshold: 10,
+        autoRebalance: false
+      });
+      expect(strategy.success).toBe(true);
+
+      // 2. Get portfolio allocation
+      const allocation = await soroban.getPortfolioAllocation({
+        password: TEST_PASSWORD
+      });
+      expect(allocation).toHaveProperty('currentAllocations');
+
+      // 3. Run dry run rebalance
+      const dryRun = await soroban.autoRebalancePortfolio({
+        password: TEST_PASSWORD,
+        dryRun: true,
+        force: true
+      });
+      expect(dryRun.dryRun).toBe(true);
+    });
+
+    test('correlation analysis informs rebalancing decisions', async () => {
+      // Analyze correlations
+      const correlations = await soroban.analyzeCorrelations({
+        assets: ['XLM', 'USDC', 'yXLM'],
+        lookbackDays: 30
+      });
+
+      // Use correlation info to set strategy
+      const strategy = await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: {
+          'XLM': 50,
+          'USDC': 30,
+          'yXLM': 20
+        },
+        driftThreshold: 5
+      });
+
+      expect(correlations).toHaveProperty('diversificationScore');
+      expect(strategy.success).toBe(true);
+    });
+
+    test('Sharpe optimization leads to rebalancing', async () => {
+      // Optimize for Sharpe ratio
+      const optimization = await soroban.optimizeSharpeRatio({
+        password: TEST_PASSWORD,
+        targetSharpe: 2.0
+      });
+
+      // Apply optimized allocation
+      const strategy = await soroban.setRebalancingStrategy({
+        password: TEST_PASSWORD,
+        targetAllocations: optimization.optimizedAllocation,
+        driftThreshold: 5
+      });
+
+      expect(optimization).toHaveProperty('optimizedAllocation');
+      expect(strategy.success).toBe(true);
+    });
   });
 });

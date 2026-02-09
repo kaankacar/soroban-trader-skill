@@ -8,6 +8,18 @@ The first autonomous trading skill built specifically for AI agents. Stop just c
 
 ---
 
+## 🚀 What's New in v3.3
+
+### 📊 Portfolio Management Suite
+Professional-grade portfolio management for AI agents:
+- **Rebalancing automation** - Set target allocations and auto-rebalance
+- **Correlation analysis** - Identify diversification risks
+- **Tax-loss harvesting** - Automated tax optimization
+- **Performance attribution** - Track what drives your returns
+- **Sharpe ratio optimization** - Risk-adjusted return maximization
+
+---
+
 ## 🚀 What's New in v3.2
 
 ### 🛤️ Advanced Multi-Hop Routing
@@ -226,6 +238,19 @@ console.log("Trade executed:", result.hash);
 |------|-------------|
 | `findCrossChainArbitrage({sourceChain, targetChains, minProfitPercent, bridgePreference})` | Detect arbitrage between Stellar and other chains |
 | `executeCrossChainArbitrage({password, opportunityId, amount, bridge, autoReturn})` | Execute cross-chain arbitrage trades |
+
+### Portfolio Management (v3.3+) 📊
+| Tool | Description |
+|------|-------------|
+| `setRebalancingStrategy({password, targetAllocations, driftThreshold, autoRebalance})` | Set target allocations and drift thresholds |
+| `getPortfolioAllocation({password, includeHistory})` | Current vs target allocation analysis |
+| `autoRebalancePortfolio({password, force, dryRun})` | Execute rebalancing trades automatically |
+| `analyzeCorrelations({assets, lookbackDays})` | Asset correlation analysis for risk management |
+| `findTaxLossOpportunities({password, minLossPercent})` | Identify tax loss harvesting opportunities |
+| `executeTaxLossHarvest({password, opportunityId, autoSwapToEquivalent})` | Execute tax loss harvesting with equivalent asset swap |
+| `getPerformanceAttribution({password, period, benchmark})` | Performance attribution - which assets drove returns |
+| `optimizeSharpeRatio({password, targetSharpe, riskFreeRate})` | Sharpe ratio optimization recommendations |
+| `getPortfolioSummary({password})` | Comprehensive portfolio overview |
 
 ---
 
@@ -470,6 +495,209 @@ const stats = await soroban.getRoutingStats({ password: "***" });
 console.log("SOR executions:", stats.sorExecutions);
 console.log("Average hops:", stats.performance.averageHops);
 console.log("Top routes:", stats.topRoutes);
+```
+
+## 💡 Example: Portfolio Management (v3.3)
+
+### Set Rebalancing Strategy
+```javascript
+// Define target allocations
+await soroban.setRebalancingStrategy({
+  password: "***",
+  targetAllocations: {
+    "XLM": 40,      // 40% XLM
+    "USDC": 30,     // 30% USDC
+    "yXLM": 20,     // 20% yield-bearing XLM
+    "yUSDC": 10     // 10% yield-bearing USDC
+  },
+  driftThreshold: 5,         // Rebalance when 5% off target
+  autoRebalance: true,       // Auto-rebalance on interval
+  rebalanceInterval: "daily",
+  strategy: "balanced"       // conservative/balanced/aggressive/custom
+});
+```
+
+### Check Portfolio Allocation
+```javascript
+// Get current vs target allocation
+const allocation = await soroban.getPortfolioAllocation({
+  password: "***",
+  includeHistory: true
+});
+
+console.log("Total value:", allocation.totalValue);
+console.log("Current allocation:", allocation.currentAllocations);
+console.log("Target allocation:", allocation.targetAllocations);
+console.log("Drift:", allocation.totalDrift);
+console.log("Needs rebalancing:", allocation.needsRebalancing);
+
+// If drift exceeds threshold
+if (allocation.needsRebalancing) {
+  // Dry run first
+  const dryRun = await soroban.autoRebalancePortfolio({
+    password: "***",
+    dryRun: true
+  });
+  
+  console.log("Trades needed:", dryRun.trades);
+  
+  // Execute rebalancing
+  const result = await soroban.autoRebalancePortfolio({
+    password: "***",
+    force: false,    // Only rebalance if drift > threshold
+    dryRun: false
+  });
+  
+  console.log("Rebalanced:", result.rebalanced);
+  console.log("Trades executed:", result.executedTrades);
+}
+```
+
+### Correlation Analysis
+```javascript
+// Analyze correlations for diversification
+const correlations = await soroban.analyzeCorrelations({
+  assets: ["XLM", "USDC", "yXLM", "yUSDC", "BTC", "ETH"],
+  lookbackDays: 30
+});
+
+console.log("Diversification score:", correlations.diversificationScore);
+console.log("Risk level:", correlations.riskLevel);
+
+// Check for high correlations (diversification risks)
+if (correlations.highCorrelations.length > 0) {
+  console.log("⚠️ High correlation pairs detected:");
+  correlations.highCorrelations.forEach(hc => {
+    console.log(`  ${hc.asset1} ↔ ${hc.asset2}: ${hc.correlation} (${hc.risk})`);
+  });
+}
+
+// View recommendations
+console.log("Rebalancing recommendations:", correlations.rebalancingRecommendations);
+```
+
+### Tax Loss Harvesting
+```javascript
+// Find tax loss opportunities
+const opportunities = await soroban.findTaxLossOpportunities({
+  password: "***",
+  minLossPercent: 5,    // Look for 5%+ unrealized losses
+  taxYear: 2026
+});
+
+console.log("Opportunities found:", opportunities.count);
+console.log("Total unrealized loss:", opportunities.totalUnrealizedLoss);
+console.log("Estimated tax savings:", opportunities.estimatedTaxSavings);
+
+// Execute tax loss harvest
+if (opportunities.opportunities.length > 0) {
+  const best = opportunities.opportunities[0];
+  
+  const result = await soroban.executeTaxLossHarvest({
+    password: "***",
+    opportunityId: best.id,
+    autoSwapToEquivalent: true,  // Swap to equivalent asset to maintain exposure
+    dryRun: false
+  });
+  
+  console.log("Realized loss:", result.realizedLoss);
+  console.log("Tax savings estimate:", result.taxSavingsEstimate);
+  console.log("Steps:", result.steps);
+}
+```
+
+### Performance Attribution
+```javascript
+// Analyze what drove portfolio returns
+const attribution = await soroban.getPerformanceAttribution({
+  password: "***",
+  period: "30d",       // 7d, 30d, 90d, 1y
+  benchmark: "XLM"     // Compare against XLM benchmark
+});
+
+console.log("Portfolio return:", attribution.portfolioReturn);
+console.log("Benchmark return:", attribution.benchmark);
+console.log("Alpha:", attribution.alpha);  // Outperformance
+
+// Top contributors
+console.log("Top contributors:");
+attribution.attribution.topContributors.forEach(c => {
+  console.log(`  ${c.asset}: +${c.contribution} contribution`);
+});
+
+// Top detractors
+console.log("Top detractors:");
+attribution.attribution.topDetractors.forEach(d => {
+  console.log(`  ${d.asset}: ${d.contribution} contribution`);
+});
+```
+
+### Sharpe Ratio Optimization
+```javascript
+// Optimize portfolio for risk-adjusted returns
+const optimization = await soroban.optimizeSharpeRatio({
+  password: "***",
+  targetSharpe: 2.0,       // Target Sharpe ratio
+  riskFreeRate: 0.02,      // 2% risk-free rate
+  maxPositions: 8
+});
+
+console.log("Current Sharpe:", optimization.currentSharpe);
+console.log("Target Sharpe:", optimization.targetSharpe);
+console.log("Status:", optimization.status);  // OPTIMAL/NEAR_OPTIMAL/NEEDS_IMPROVEMENT
+
+// View asset analysis
+optimization.assetAnalysis.forEach(asset => {
+  console.log(`${asset.asset}: Sharpe ${asset.sharpeRatio}, Weight ${asset.currentWeight}`);
+});
+
+// Apply recommendations
+console.log("Recommendations:");
+optimization.recommendations.forEach(rec => {
+  console.log(`  [${rec.action}] ${rec.asset}: ${rec.reason}`);
+});
+
+// Get optimized allocation
+console.log("Optimized allocation:", optimization.optimizedAllocation);
+
+// Apply via rebalancing strategy
+await soroban.setRebalancingStrategy({
+  password: "***",
+  targetAllocations: optimization.optimizedAllocation,
+  driftThreshold: 5,
+  autoRebalance: true
+});
+```
+
+### Portfolio Summary
+```javascript
+// Get comprehensive portfolio overview
+const summary = await soroban.getPortfolioSummary({ password: "***" });
+
+console.log("=== Portfolio Overview ===");
+console.log("Total value:", summary.overview.totalValue);
+console.log("Asset count:", summary.overview.assetCount);
+console.log("Sharpe ratio:", summary.overview.currentSharpe);
+console.log("Alpha vs benchmark:", summary.overview.alphaVsBenchmark);
+
+console.log("\n=== Allocation ===");
+console.log("Drift:", summary.allocation.drift);
+console.log("Needs rebalancing:", summary.allocation.needsRebalancing);
+
+console.log("\n=== Performance ===");
+console.log("Period return:", summary.performance.periodReturn);
+console.log("Top contributors:", summary.performance.topContributors);
+
+console.log("\n=== Risk ===");
+console.log("Diversification score:", summary.risk.diversificationScore);
+console.log("High correlations:", summary.risk.highCorrelations);
+
+console.log("\n=== Tax ===");
+console.log("Harvested YTD:", summary.tax.harvestedYTD);
+console.log("Opportunities available:", summary.tax.opportunitiesAvailable);
+
+console.log("\n=== Recommendations ===");
+summary.recommendations.forEach(rec => console.log("  -", rec));
 ```
 
 ## 💡 Example: Autonomous Yield Strategy
@@ -728,6 +956,7 @@ Join the conversation on [Moltbook](https://moltbook.com) (agent social network)
 
 ## 📊 Version History
 
+- **v3.3.0** - Portfolio Management: Rebalancing automation, correlation analysis, tax-loss harvesting, performance attribution, Sharpe optimization
 - **v3.2.0** - Advanced Routing & Multi-Hop: SOR engine, price impact calculator, cross-chain arbitrage
 - **v3.1.0** - WASM hot path, MEV protection, flash loans, transaction bundling, slippage protection
 - **v3.0.0** - Yield aggregator, social trading, HSM support
@@ -748,7 +977,7 @@ Join the conversation on [Moltbook](https://moltbook.com) (agent social network)
 - **SDK:** `@stellar/stellar-sdk`
 - **DEX:** Stellar Built-in (Horizon), Soroswap, Phoenix
 - **Storage:** Encrypted local filesystem
-- **Testing:** Jest (55+ test cases)
+- **Testing:** Jest (85+ test cases covering v3.0, v3.1, v3.2, v3.3)
 - **Security:** AES-256, HSM/Secure Enclave, MEV protection
 - **Performance:** Rust/WASM hot path
 - **Lending:** Blend, Nostra integration

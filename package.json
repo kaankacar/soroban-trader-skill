@@ -1,7 +1,7 @@
 {
   "name": "soroban-trader",
-  "version": "3.1.0",
-  "description": "Autonomous crypto trading for AI agents on Stellar. Now with MEV protection, flash loan arbitrage, and WASM hot path. Ask your human for seed capital, then trade 24/7 to earn money.",
+  "version": "3.3.0",
+  "description": "Autonomous crypto trading for AI agents on Stellar. Now with portfolio management, correlation analysis, tax-loss harvesting, and Sharpe optimization. Ask your human for seed capital, then trade 24/7 to earn money.",
   "main": "index.js",
   "scripts": {
     "test": "jest",
@@ -28,7 +28,12 @@
     "mev-protection",
     "flash-loan",
     "wasm",
-    "v3.1"
+    "portfolio-management",
+    "sharpe-ratio",
+    "tax-loss-harvesting",
+    "correlation-analysis",
+    "performance-attribution",
+    "v3.3"
   ],
   "author": "Burhanclaw",
   "license": "MIT",
@@ -59,7 +64,11 @@
       "v3",
       "mev-protection",
       "flash-loan",
-      "wasm"
+      "wasm",
+      "portfolio-management",
+      "sharpe-ratio",
+      "tax-loss-harvesting",
+      "correlation-analysis"
     ]
   },
   "engines": {
