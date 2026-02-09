@@ -2,6 +2,12 @@ const { Horizon, rpc, xdr, Networks, TransactionBuilder, Account, Contract, Addr
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const axios = require('axios');
+
+// Horizon API endpoints for real data
+const HORIZON_API = 'https://horizon.stellar.org';
+const HORIZON_TRADES_API = `${HORIZON_API}/trades`;
+const HORIZON_ORDERBOOK_API = `${HORIZON_API}/order_book`;
 
 // V3.1: WASM Module Loading
 let wasmModule = null;
@@ -487,39 +493,17 @@ function isSecureEnclaveAvailable() {
 
 // === V3.1 HELPER FUNCTIONS ===
 
-// Simulate arbitrage profit calculation
-function simulateArbitrageProfit(protocol, token) {
-  // Simulate price discrepancies based on protocol and token
-  const baseProfit = Math.random() * 2.0; // 0-2% base profit
-  
-  // Higher volatility for certain tokens
-  const tokenMultiplier = ['BTC', 'ETH'].includes(token) ? 1.5 : 1.0;
-  
-  // Lower profit for larger protocols (more efficient)
-  const protocolMultiplier = protocol === 'Blend' ? 0.8 : 1.0;
-  
-  return baseProfit * tokenMultiplier * protocolMultiplier;
-}
+// NOTE: Real arbitrage detection requires live orderbook comparison across DEXs
+// These helpers are kept for structure but require real DEX integration
 
-// Generate arbitrage path
-function generateArbitragePath(protocol, token) {
-  const paths = {
-    'Blend': [
-      { protocol: 'Blend', tokenIn: token, tokenOut: 'USDC', amountIn: '1000', expectedAmountOut: '1000', poolAddress: 'CB...' },
-      { protocol: 'Phoenix', tokenIn: 'USDC', tokenOut: token, amountIn: '1000', expectedAmountOut: '1005', poolAddress: 'CA...' }
-    ],
-    'Phoenix': [
-      { protocol: 'Phoenix', tokenIn: token, tokenOut: 'yUSDC', amountIn: '1000', expectedAmountOut: '999', poolAddress: 'CD...' },
-      { protocol: 'Soroswap', tokenIn: 'yUSDC', tokenOut: token, amountIn: '999', expectedAmountOut: '1003', poolAddress: 'CE...' }
-    ]
-  };
-  
+// Check if arbitrage opportunity exists by comparing real DEX quotes
+async function checkRealArbitrage(protocol, token) {
+  // This would compare actual prices across Phoenix, Soroswap, and Stellar DEX
+  // Requires calling each DEX's quote function with real data
   return {
-    protocol: protocol,
-    token: token,
-    steps: paths[protocol] || paths['Blend'],
-    expectedProfit: '5.00',
-    totalGasCost: '0.01'
+    requiresIntegration: true,
+    message: "Real arbitrage detection requires DEX contract queries",
+    note: "Use findArbitrage() which uses real Horizon orderbook data"
   };
 }
 
@@ -529,20 +513,45 @@ function calculateDynamicSlippage(baseBps, volatilityMultiplier, maxBps, minBps,
   return Math.min(Math.max(Math.round(adjusted), minBps), maxBps);
 }
 
-// Simulate current market volatility (0.0 - 1.0)
-function simulateMarketVolatility() {
-  // In production, this would query market data
-  // Returns a value between 0.0 (calm) and 1.0 (extreme volatility)
-  const hour = new Date().getUTCHours();
-  
-  // Higher volatility during market open hours
-  let baseVolatility = 0.2;
-  if ((hour >= 13 && hour <= 21)) { // US market hours
-    baseVolatility = 0.4;
+// Get real market volatility from Horizon trade data
+async function getMarketVolatility(asset = 'native') {
+  try {
+    // Fetch recent trades to calculate volatility
+    const response = await axios.get(`${HORIZON_TRADES_API}`, {
+      params: {
+        base_asset_type: 'native',
+        counter_asset_type: 'credit_alphanum4',
+        counter_asset_code: 'USDC',
+        counter_asset_issuer: 'GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        order: 'desc',
+        limit: 100
+      },
+      timeout: 5000
+    });
+    
+    if (!response.data._embedded?.records?.length) {
+      return 0.2; // Default moderate volatility
+    }
+    
+    const trades = response.data._embedded.records;
+    const prices = trades.map(t => parseFloat(t.price.n) / parseFloat(t.price.d));
+    
+    // Calculate price volatility (standard deviation of returns)
+    const returns = [];
+    for (let i = 1; i < prices.length; i++) {
+      returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+    }
+    
+    const meanReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Normalize to 0-1 range (assuming max reasonable volatility is 10% per trade)
+    return Math.min(1.0, stdDev * 10);
+  } catch (e) {
+    console.log('[SorobanTrader] Using default volatility due to API error:', e.message);
+    return 0.2; // Default moderate volatility
   }
-  
-  // Add random variation
-  return Math.min(1.0, Math.max(0.0, baseVolatility + (Math.random() - 0.5) * 0.3));
 }
 
 // === V3.2 HELPER FUNCTIONS (outside module.exports) ===
@@ -787,28 +796,95 @@ function calculateStdDev(returns) {
   return Math.sqrt(variance);
 }
 
-// Get historical prices (simulated for demo)
-function getHistoricalPrices(asset, days = 30) {
-  const prices = [];
-  const basePrice = asset === 'XLM' ? 1.0 : 
-                   asset === 'USDC' ? 5.0 :
-                   asset === 'yXLM' ? 1.05 :
-                   asset === 'BTC' ? 50000 :
-                   asset === 'ETH' ? 3000 :
-                   asset.includes('USDC') ? 5.0 :
-                   asset.includes('yXLM') ? 1.05 :
-                   asset.includes('yUSDC') ? 5.25 : 10;
-  
-  for (let i = days; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const randomWalk = (Math.random() - 0.5) * 0.02; // 2% daily volatility
-    const trend = 0.0002; // Slight upward trend
-    const price = basePrice * Math.pow(1 + randomWalk + trend, i);
-    prices.push({ date: date.toISOString().split('T')[0], price: price });
+// Get historical prices from Horizon API - REAL DATA
+async function getHistoricalPrices(asset, days = 30) {
+  try {
+    const prices = [];
+    
+    // Build asset parameters for Horizon API
+    let baseAsset, counterAsset;
+    
+    if (asset === 'XLM' || asset === 'native') {
+      // For XLM, get trades against USDC
+      baseAsset = 'native';
+      counterAsset = 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ';
+    } else if (asset.includes(':')) {
+      // Asset with issuer
+      baseAsset = asset;
+      counterAsset = 'native';
+    } else {
+      // Try to find the asset on the DEX
+      baseAsset = `${asset}:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ`;
+      counterAsset = 'native';
+    }
+    
+    // Fetch real trades from Horizon
+    const response = await axios.get(`${HORIZON_TRADES_API}`, {
+      params: {
+        base_asset_type: baseAsset === 'native' ? 'native' : 'credit_alphanum4',
+        base_asset_code: baseAsset === 'native' ? undefined : baseAsset.split(':')[0],
+        base_asset_issuer: baseAsset === 'native' ? undefined : baseAsset.split(':')[1],
+        counter_asset_type: counterAsset === 'native' ? 'native' : 'credit_alphanum4',
+        counter_asset_code: counterAsset === 'native' ? undefined : counterAsset.split(':')[0],
+        counter_asset_issuer: counterAsset === 'native' ? undefined : counterAsset.split(':')[1],
+        order: 'desc',
+        limit: Math.min(days * 10, 200) // Get more trades than days for better data
+      },
+      timeout: 10000
+    });
+    
+    if (!response.data || !response.data._embedded || !response.data._embedded.records) {
+      throw new Error('No trade data available from Horizon');
+    }
+    
+    const trades = response.data._embedded.records;
+    
+    if (trades.length === 0) {
+      throw new Error('No trades found for this asset pair');
+    }
+    
+    // Group trades by date and calculate daily prices
+    const dailyPrices = {};
+    
+    for (const trade of trades) {
+      const date = new Date(trade.ledger_close_time).toISOString().split('T')[0];
+      
+      // Calculate price from trade (price = n/d)
+      const price = parseFloat(trade.price.n) / parseFloat(trade.price.d);
+      
+      if (!dailyPrices[date]) {
+        dailyPrices[date] = {
+          prices: [],
+          open: price,
+          high: price,
+          low: price,
+          close: price
+        };
+      }
+      
+      dailyPrices[date].prices.push(price);
+      dailyPrices[date].high = Math.max(dailyPrices[date].high, price);
+      dailyPrices[date].low = Math.min(dailyPrices[date].low, price);
+      dailyPrices[date].close = price;
+    }
+    
+    // Convert to array format
+    const sortedDates = Object.keys(dailyPrices).sort();
+    for (const date of sortedDates.slice(-days)) {
+      prices.push({
+        date: date,
+        price: dailyPrices[date].close,
+        open: dailyPrices[date].open,
+        high: dailyPrices[date].high,
+        low: dailyPrices[date].low
+      });
+    }
+    
+    return prices;
+  } catch (e) {
+    console.error(`[SorobanTrader] Error fetching historical prices: ${e.message}`);
+    throw new Error(`Cannot get historical prices: ${e.message}. Ensure the asset has trading activity on Stellar DEX.`);
   }
-  
-  return prices;
 }
 
 // Calculate returns from prices
@@ -1884,63 +1960,27 @@ module.exports = {
   // === V3.0 FEATURES ===
 
   // Tool: scanYields (v3.0 - Yield Aggregator)
-  // Scans for highest APY opportunities across protocols
+  // NOTE: This function requires integration with actual DeFi protocols (Phoenix, Soroswap, Blend)
+  // Horizon API does not provide yield/APY data - this requires direct protocol contract calls
   scanYields: async ({ minAPY = 1.0, protocols = ['all'] }) => {
     try {
-      // Query multiple yield sources
-      const allOpportunities = [
-        // Phoenix DEX pools
-        { protocol: 'Phoenix', pool: 'XLM/USDC', apy: 12.5, tvl: '5000000', risk: 'medium', category: 'amm' },
-        { protocol: 'Phoenix', pool: 'XLM/yUSDC', apy: 14.2, tvl: '3200000', risk: 'medium', category: 'amm' },
-        { protocol: 'Phoenix', pool: 'yXLM/USDC', apy: 11.8, tvl: '4100000', risk: 'medium', category: 'amm' },
-        // Soroswap pools
-        { protocol: 'Soroswap', pool: 'XLM/USDC', apy: 10.2, tvl: '8000000', risk: 'medium', category: 'amm' },
-        { protocol: 'Soroswap', pool: 'XLM/yXLM', apy: 8.5, tvl: '6500000', risk: 'low', category: 'amm' },
-        { protocol: 'Soroswap', pool: 'USDC/yUSDC', apy: 6.2, tvl: '9200000', risk: 'low', category: 'amm' },
-        // Stellar LPs
-        { protocol: 'Stellar LPs', pool: 'yXLM', apy: 5.8, tvl: '12000000', risk: 'low', category: 'lending' },
-        { protocol: 'Stellar LPs', pool: 'yUSDC', apy: 4.5, tvl: '15000000', risk: 'low', category: 'lending' },
-        // Aqua protocol
-        { protocol: 'Aqua', pool: 'XLM/USDC', apy: 15.3, tvl: '3000000', risk: 'medium', category: 'amm' },
-        { protocol: 'Aqua', pool: 'AQUA/XLM', apy: 22.1, tvl: '1800000', risk: 'high', category: 'amm' },
-        // Blend (lending)
-        { protocol: 'Blend', pool: 'XLM Supply', apy: 3.2, tvl: '25000000', risk: 'low', category: 'lending' },
-        { protocol: 'Blend', pool: 'USDC Supply', apy: 5.8, tvl: '18000000', risk: 'low', category: 'lending' }
-      ];
-
-      // Filter by protocols if specified
-      let opportunities = allOpportunities;
-      if (!protocols.includes('all')) {
-        opportunities = allOpportunities.filter(o => protocols.includes(o.protocol.toLowerCase()));
-      }
-
-      // Filter by minimum APY
-      opportunities = opportunities.filter(o => o.apy >= minAPY);
-
-      // Sort by APY descending
-      opportunities.sort((a, b) => b.apy - a.apy);
-
-      // Calculate risk-adjusted returns (Sharpe-like ratio)
-      const riskWeights = { low: 1.0, medium: 0.7, high: 0.4 };
-      opportunities = opportunities.map(o => ({
-        ...o,
-        riskAdjustedAPY: (o.apy * riskWeights[o.risk]).toFixed(2)
-      }));
-
-      // Cache results
-      const cache = loadYieldCache();
-      cache.pools = opportunities.slice(0, 20);
-      cache.lastUpdated = new Date().toISOString();
-      saveYieldCache(cache);
-
+      // Return error indicating real protocol integration is required
       return {
-        opportunities: opportunities,
-        best: opportunities[0] || null,
-        totalProtocols: [...new Set(opportunities.map(o => o.protocol))].length,
-        totalTVL: opportunities.reduce((sum, o) => sum + parseInt(o.tvl), 0).toString(),
-        message: `Found ${opportunities.length} yield opportunity(s). Best: ${opportunities[0]?.apy}% APY on ${opportunities[0]?.protocol} ${opportunities[0]?.pool}`,
-        cached: false,
-        lastUpdated: cache.lastUpdated
+        error: "Real yield data requires direct protocol integration",
+        message: "Phoenix, Soroswap, and Blend protocols must be queried directly via their smart contracts",
+        note: "Horizon API does not provide yield/APY data",
+        requiredActions: [
+          "Integrate with Phoenix DEX contract: CBVZQN24JQFPZ5N32DKNNGXY5N2T3B5SC7JLF4NPE6XZVKYSFG5PMKTC",
+          "Integrate with Soroswap SDK for pool data",
+          "Integrate with Blend lending pools for supply APY",
+          "Query each protocol's contract state for real-time APY calculations"
+        ],
+        protocolAddresses: {
+          phoenixFactory: 'CBVZQN24JQFPZ5N32DKNNGXY5N2T3B5SC7JLF4NPE6XZVKYSFG5PMKTC',
+          phoenixRouter: 'CARON4S73ZMW2YX7ZQDPX5IEKAOIQUXN65YBH42CS4JQCW356HNQJMOQ',
+          blendPools: 'Query Blend protocol for active lending pools'
+        },
+        documentation: "https://developers.stellar.org/docs/build/smart-contracts"
       };
     } catch (e) {
       return { error: e.message };
@@ -2133,69 +2173,36 @@ module.exports = {
   },
 
   // Tool: getLeaderboard (v3.0 - Social Trading)
-  // Returns leaderboard of successful trading agents
+  // NOTE: Real trader leaderboard requires on-chain trade tracking or indexed data
+  // Horizon API provides transaction history but not PnL calculations
   getLeaderboard: async ({ timeframe = '7d', limit = 10, sortBy = 'pnl' }) => {
     try {
-      // In production, this would query on-chain trading data
-      // For now, simulate a comprehensive leaderboard
-      const allTraders = [
-        { address: 'GABCD123456789ABCDEF123456789ABCDEF123456789ABCDEF12345678', pnl: 25.5, trades: 45, winRate: 68, followers: 120, avgTradeSize: '500', sharpeRatio: 1.8, maxDrawdown: -8.5 },
-        { address: 'GEFGH234567890BCDEF234567890BCDEF234567890BCDEF234567890', pnl: 18.3, trades: 32, winRate: 72, followers: 89, avgTradeSize: '1200', sharpeRatio: 2.1, maxDrawdown: -5.2 },
-        { address: 'GHIJK345678901CDEF345678901CDEF345678901CDEF345678901CDE', pnl: 15.7, trades: 28, winRate: 65, followers: 156, avgTradeSize: '800', sharpeRatio: 1.5, maxDrawdown: -12.1 },
-        { address: 'GLMNO456789012DEF456789012DEF456789012DEF456789012DEF45', pnl: 12.1, trades: 67, winRate: 58, followers: 45, avgTradeSize: '300', sharpeRatio: 1.2, maxDrawdown: -15.3 },
-        { address: 'GPQRS567890123EF567890123EF567890123EF567890123EF567890', pnl: 9.8, trades: 23, winRate: 74, followers: 203, avgTradeSize: '2000', sharpeRatio: 2.4, maxDrawdown: -4.1 },
-        { address: 'GTUVW678901234F678901234F678901234F678901234F678901234F', pnl: 8.5, trades: 89, winRate: 55, followers: 67, avgTradeSize: '250', sharpeRatio: 0.9, maxDrawdown: -18.7 },
-        { address: 'GXYZA789012345G789012345G789012345G789012345G789012345', pnl: 7.2, trades: 41, winRate: 61, followers: 98, avgTradeSize: '600', sharpeRatio: 1.4, maxDrawdown: -9.8 },
-        { address: 'GBCDE890123456H890123456H890123456H890123456H890123456', pnl: 6.8, trades: 15, winRate: 80, followers: 34, avgTradeSize: '1500', sharpeRatio: 2.7, maxDrawdown: -3.5 },
-        { address: 'GFGHI901234567I901234567I901234567I901234567I901234567', pnl: 5.4, trades: 52, winRate: 54, followers: 78, avgTradeSize: '400', sharpeRatio: 1.0, maxDrawdown: -14.2 },
-        { address: 'GJKLM012345678J012345678J012345678J012345678J012345678', pnl: 4.1, trades: 37, winRate: 62, followers: 56, avgTradeSize: '750', sharpeRatio: 1.3, maxDrawdown: -10.5 },
-        { address: 'GNOPQ123456789K123456789K123456789K123456789K123456789', pnl: 3.8, trades: 19, winRate: 68, followers: 42, avgTradeSize: '1000', sharpeRatio: 1.9, maxDrawdown: -7.2 },
-        { address: 'GRSTU234567890L234567890L234567890L234567890L234567890', pnl: 2.5, trades: 73, winRate: 51, followers: 31, avgTradeSize: '350', sharpeRatio: 0.8, maxDrawdown: -21.4 }
-      ];
-
-      // Sort by specified criteria
-      const sortOptions = {
-        pnl: (a, b) => b.pnl - a.pnl,
-        winRate: (a, b) => b.winRate - a.winRate,
-        followers: (a, b) => b.followers - a.followers,
-        sharpeRatio: (a, b) => b.sharpeRatio - a.sharpeRatio,
-        trades: (a, b) => b.trades - a.trades
-      };
-
-      const sorted = [...allTraders].sort(sortOptions[sortBy] || sortOptions.pnl);
-      const traders = sorted.slice(0, limit);
-
-      // Calculate stats
-      const avgPnL = (traders.reduce((sum, t) => sum + t.pnl, 0) / traders.length).toFixed(1);
-      const avgWinRate = Math.round(traders.reduce((sum, t) => sum + t.winRate, 0) / traders.length);
-      const totalFollowers = traders.reduce((sum, t) => sum + t.followers, 0);
-
       return {
-        timeframe,
-        sortBy,
-        totalTraders: allTraders.length,
-        stats: {
-          avgPnL: avgPnL + '%',
-          avgWinRate: avgWinRate + '%',
-          totalFollowers,
-          bestSharpe: Math.max(...traders.map(t => t.sharpeRatio)).toFixed(1),
-          lowestDrawdown: Math.max(...traders.map(t => t.maxDrawdown)).toFixed(1) + '%'
+        error: "Social trading leaderboard requires on-chain indexing",
+        message: "Real trader PnL data requires:",
+        requirements: [
+          "On-chain trade tracking (all swaps, DEX interactions)",
+          "Historical cost basis calculation per address",
+          "Indexed database of trader performance metrics",
+          "Integration with Stellar.expert or similar analytics"
+        ],
+        availableData: {
+          horizon: {
+            url: HORIZON_API,
+            capabilities: [
+              "Transaction history by address",
+              "Payment operations",
+              "DEX trade history (path payments)"
+            ],
+            limitations: [
+              "No PnL calculation",
+              "No aggregated trader stats",
+              "No win rate tracking"
+            ]
+          }
         },
-        traders: traders.map((t, i) => ({
-          rank: i + 1,
-          address: t.address,
-          displayAddress: t.address.substring(0, 10) + '...' + t.address.substring(t.address.length - 4),
-          pnl: t.pnl + '%',
-          trades: t.trades,
-          winRate: t.winRate + '%',
-          followers: t.followers,
-          avgTradeSize: t.avgTradeSize + ' XLM',
-          sharpeRatio: t.sharpeRatio,
-          maxDrawdown: t.maxDrawdown + '%',
-          riskLevel: t.sharpeRatio > 2.0 ? 'low' : t.sharpeRatio > 1.0 ? 'medium' : 'high'
-        })),
-        message: `Top ${traders.length} traders for ${timeframe}. Best: ${traders[0].pnl}% returns`,
-        leaderboard: traders.map((t, i) => `${i+1}. ${t.address.substring(0, 15)}... - ${t.pnl}% returns (${t.winRate}% win rate, ${t.sharpeRatio} Sharpe)`)
+        alternative: "Use getWallet() to check your own performance",
+        note: "For production social trading, build an indexer or use existing analytics platforms"
       };
     } catch (e) {
       return { error: e.message };
@@ -2596,78 +2603,29 @@ module.exports = {
   // === V3.1 FEATURES: Execution & Slippage Protection ===
 
   // Tool: findFlashLoanArbitrage (v3.1 - Find flash loan opportunities)
+  // NOTE: Flash loans require integration with lending protocol contracts (Blend, Nostra)
   findFlashLoanArbitrage: async ({ 
     minProfitPercent = 0.5, 
     maxBorrowAmount = '10000',
     protocols = ['Blend', 'Phoenix', 'Soroswap', 'Aqua']
   }) => {
     try {
-      const opportunities = [];
-      const history = loadFlashLoanHistory();
-
-      // Simulate flash loan opportunities across protocols
-      // In production, this would query actual lending pools
-      const lendingProtocols = [
-        { name: 'Blend', feeBps: 9, availableLiquidity: 500000 },
-        { name: 'Nostra', feeBps: 10, availableLiquidity: 300000 },
-        { name: 'Aave-Soroban', feeBps: 9, availableLiquidity: 200000 }
-      ];
-
-      const tokens = ['XLM', 'USDC', 'yXLM', 'yUSDC', 'BTC', 'ETH'];
-
-      for (const protocol of lendingProtocols) {
-        for (const token of tokens) {
-          // Simulate arbitrage detection
-          // Check for price discrepancies across DEXs
-          const profitPotential = simulateArbitrageProfit(protocol.name, token);
-          
-          if (profitPotential >= minProfitPercent) {
-            const maxBorrow = Math.min(
-              parseFloat(maxBorrowAmount),
-              protocol.availableLiquidity * 0.9
-            );
-
-            opportunities.push({
-              id: crypto.randomUUID(),
-              protocol: protocol.name,
-              token: token,
-              borrowAmount: maxBorrow.toFixed(2),
-              feeBps: protocol.feeBps,
-              feeAmount: (maxBorrow * protocol.feeBps / 10000).toFixed(4),
-              expectedProfit: (maxBorrow * profitPotential / 100).toFixed(2),
-              profitPercent: profitPotential.toFixed(2),
-              netProfit: (maxBorrow * (profitPotential / 100 - protocol.feeBps / 10000)).toFixed(2),
-              profitable: profitPotential > (protocol.feeBps / 100 * 100),
-              arbitragePath: generateArbitragePath(protocol.name, token),
-              timestamp: new Date().toISOString(),
-              expiry: new Date(Date.now() + 60000).toISOString() // 1 minute expiry
-            });
-          }
-        }
-      }
-
-      // Sort by net profit
-      opportunities.sort((a, b) => parseFloat(b.netProfit) - parseFloat(a.netProfit));
-
       return {
-        opportunities: opportunities,
-        count: opportunities.length,
-        protocolsChecked: protocols,
-        lendingProtocols: lendingProtocols.map(p => p.name),
-        profitable: opportunities.filter(o => o.profitable),
-        recentHistory: history.slice(-5),
-        message: opportunities.length > 0
-          ? `Found ${opportunities.length} flash loan opportunity(s). Best: ${opportunities[0]?.protocol} ${opportunities[0]?.token} with ${opportunities[0]?.netProfit} XLM net profit`
-          : `No flash loan arbitrage found with >${minProfitPercent}% profit. Checked ${protocols.length} protocols.`,
-        recommendations: opportunities.length > 0 ? [
-          'Use executeFlashLoanArbitrage() to execute the best opportunity',
-          'Opportunities expire quickly - act within 60 seconds',
-          'Ensure sufficient gas for multi-step transactions'
-        ] : [
-          'Try lowering minProfitPercent for more opportunities',
-          'Monitor during high volatility periods',
-          'Check multiple protocols for best rates'
-        ]
+        error: "Flash loan arbitrage requires lending protocol integration",
+        message: "Detecting flash loan opportunities requires:",
+        requirements: [
+          "Integration with Blend lending pools",
+          "Integration with Nostra lending pools", 
+          "Real-time price comparison across all DEXs",
+          "Flash loan contract interaction capabilities"
+        ],
+        protocolContracts: {
+          blend: "Blend pool contracts on Stellar",
+          nostra: "Nostra lending protocol",
+          aave: "AAVE on Stellar (if available)"
+        },
+        alternative: "Use findArbitrage() for real arbitrage using Horizon orderbook data",
+        note: "Flash loans are advanced DeFi primitives requiring specific contract integrations"
       };
     } catch (e) {
       return { error: e.message };
@@ -2675,6 +2633,7 @@ module.exports = {
   },
 
   // Tool: executeFlashLoanArbitrage (v3.1 - Execute flash loan arbitrage)
+  // NOTE: Flash loan execution requires lending protocol contract integration
   executeFlashLoanArbitrage: async ({ 
     password, 
     opportunityId, 
@@ -2683,87 +2642,25 @@ module.exports = {
     slippageBps = 100 
   }) => {
     try {
-      const wallet = loadWallet(password);
-      if (!wallet) {
-        return { error: "No wallet configured. Use setKey() first." };
-      }
-
-      const slippageConfig = loadSlippageConfig();
-      const history = loadFlashLoanHistory();
-
-      // Build flash loan transaction
-      const keypair = Keypair.fromSecret(wallet.privateKey);
-      const sourceAccount = await server.loadAccount(wallet.publicKey);
-
-      // Build multi-step arbitrage transaction
-      const operations = [];
-
-      // Step 1: Flash loan borrow (simulated - would be actual contract call)
-      operations.push(Operation.payment({
-        destination: wallet.publicKey,
-        asset: Asset.native(),
-        amount: borrowAmount
-      }));
-
-      // Step 2-4: Arbitrage swaps (simplified)
-      if (arbitragePath && arbitragePath.steps) {
-        for (const step of arbitragePath.steps) {
-          operations.push(Operation.pathPaymentStrictReceive({
-            sendAsset: step.tokenIn === 'native' ? Asset.native() : new Asset(step.tokenIn.split(':')[0], step.tokenIn.split(':')[1]),
-            sendMax: step.amountIn,
-            destination: wallet.publicKey,
-            destAsset: step.tokenOut === 'native' ? Asset.native() : new Asset(step.tokenOut.split(':')[0], step.tokenOut.split(':')[1]),
-            destAmount: step.expectedAmountOut
-          }));
-        }
-      }
-
-      // Build transaction with slippage protection
-      const transaction = new TransactionBuilder(sourceAccount, {
-        fee: '100',
-        networkPassphrase: NETWORK_PASSPHRASE
-      });
-
-      for (const op of operations) {
-        transaction.addOperation(op);
-      }
-
-      transaction.setTimeout(30);
-      const built = transaction.build();
-      built.sign(keypair);
-
-      // Submit to network
-      const submissionResult = await server.submitTransaction(built);
-
-      // Record in history
-      const record = {
-        id: opportunityId || crypto.randomUUID(),
-        hash: submissionResult.hash,
-        protocol: arbitragePath?.protocol || 'unknown',
-        borrowAmount,
-        timestamp: new Date().toISOString(),
-        slippageProtected: true,
-        status: 'executed',
-        estimatedProfit: arbitragePath?.expectedProfit || '0'
-      };
-      history.push(record);
-      saveFlashLoanHistory(history);
-
       return {
-        success: true,
-        hash: submissionResult.hash,
-        opportunityId,
-        borrowAmount,
-        slippageProtected: true,
-        ledger: submissionResult.ledger,
-        status: 'confirmed',
-        historyRecord: record,
-        message: `⚡ Flash loan arbitrage executed! Borrowed ${borrowAmount} XLM`,
-        url: `https://stellar.expert/explorer/public/tx/${submissionResult.hash}`,
-        nextSteps: [
-          'Monitor transaction for confirmation',
-          'Track profit/loss in getFlashLoanHistory()',
-          'Consider using bundleTransactions() for atomic execution'
+        error: "Flash loan execution requires lending protocol contracts",
+        message: "Executing flash loans requires:",
+        requirements: [
+          "Smart contract integration with Blend or Nostra",
+          "Custom flash loan contract deployed on Stellar",
+          "Multi-step transaction atomicity guarantees",
+          "Fallback mechanisms for failed arbitrage"
+        ],
+        architecture: {
+          step1: "Borrow from lending pool via smart contract",
+          step2: "Execute arbitrage trades atomically",
+          step3: "Repay loan + fees within same transaction",
+          step4: "Keep profit or revert if unprofitable"
+        },
+        note: "Flash loans are complex DeFi primitives. Consider starting with simple arbitrage using findArbitrage()",
+        resources: [
+          "https://developers.stellar.org/docs/build/smart-contracts",
+          "Blend protocol documentation"
         ]
       };
     } catch (e) {
@@ -2971,8 +2868,8 @@ module.exports = {
 
       const config = loadSlippageConfig();
       
-      // Get current market volatility (simulated)
-      const currentVolatility = simulateMarketVolatility();
+      // Get current market volatility from real Horizon data
+      const currentVolatility = await getMarketVolatility();
       const currentSlippage = config.dynamicAdjustment
         ? calculateDynamicSlippage(config.baseBps, config.volatilityMultiplier, config.maxBps, config.minBps, currentVolatility)
         : config.baseBps;
@@ -2984,6 +2881,7 @@ module.exports = {
         currentSlippageBps: currentSlippage,
         currentSlippagePercent: (currentSlippage / 100).toFixed(2) + '%',
         dynamicAdjustment: config.dynamicAdjustment,
+        dataSource: HORIZON_API,
         message: config.dynamicAdjustment
           ? `📊 Dynamic slippage active: ${currentSlippage}bps (${(currentSlippage/100).toFixed(2)}%) at ${(currentVolatility * 100).toFixed(1)}% volatility`
           : `📊 Fixed slippage: ${config.baseBps}bps`,
@@ -3080,7 +2978,7 @@ module.exports = {
       // Calculate dynamic slippage
       let slippageBps = customSlippageBps;
       if (slippageBps === null && slippageConfig.dynamicAdjustment && useSlippageProtection) {
-        const volatility = simulateMarketVolatility();
+        const volatility = await getMarketVolatility();
         slippageBps = calculateDynamicSlippage(
           slippageConfig.baseBps,
           slippageConfig.volatilityMultiplier,
@@ -3728,6 +3626,8 @@ module.exports = {
   },
 
   // Tool: findCrossChainArbitrage (v3.2 - Cross-chain arbitrage detector)
+  // NOTE: Cross-chain arbitrage requires external price oracles/aggregators
+  // Horizon API only provides Stellar network data
   findCrossChainArbitrage: async ({
     sourceChain = 'stellar',
     targetChains = ['ethereum', 'solana', 'polygon'],
@@ -3736,135 +3636,27 @@ module.exports = {
     bridgePreference = 'fastest'
   }) => {
     try {
-      // Bridge configurations
-      const bridges = {
-        stellar: {
-          ethereum: [
-            { name: 'Allbridge', fee: 0.5, time: '10-30min', supported: ['USDC', 'ETH', 'BTC'] },
-            { name: 'Stellar-Ethereum Bridge', fee: 0.3, time: '5-15min', supported: ['XLM', 'USDC'] }
-          ],
-          solana: [
-            { name: 'Allbridge', fee: 0.3, time: '5-15min', supported: ['USDC', 'SOL'] },
-            { name: 'Wormhole', fee: 0.4, time: '3-10min', supported: ['USDC', 'ETH', 'BTC'] }
-          ],
-          polygon: [
-            { name: 'Allbridge', fee: 0.4, time: '5-20min', supported: ['USDC', 'MATIC'] }
-          ]
-        }
-      };
-
-      // Mock price data for cross-chain comparison
-      const mockPrices = {
-        stellar: {
-          'XLM': 1.0,
-          'USDC': 5.0,
-          'ETH': 3000.0,
-          'BTC': 50000.0,
-          'SOL': 50.0
-        },
-        ethereum: {
-          'XLM': 1.02,
-          'USDC': 4.95,
-          'ETH': 2950.0,
-          'BTC': 50500.0,
-          'SOL': 49.5
-        },
-        solana: {
-          'XLM': 0.99,
-          'USDC': 5.02,
-          'ETH': 3020.0,
-          'BTC': 49800.0,
-          'SOL': 50.5
-        },
-        polygon: {
-          'XLM': 1.01,
-          'USDC': 4.98,
-          'ETH': 2980.0,
-          'BTC': 50100.0
-        }
-      };
-
-      const opportunities = [];
-
-      // Check arbitrage opportunities for each target chain
-      for (const targetChain of targetChains) {
-        for (const [asset, stellarPrice] of Object.entries(mockPrices.stellar)) {
-          const targetPrice = mockPrices[targetChain]?.[asset];
-          if (!targetPrice) continue;
-
-          // Calculate price difference
-          const priceDiff = Math.abs(stellarPrice - targetPrice);
-          const avgPrice = (stellarPrice + targetPrice) / 2;
-          const profitPercent = (priceDiff / avgPrice) * 100;
-
-          if (profitPercent >= minProfitPercent) {
-            // Determine direction
-            const buyOnStellar = stellarPrice < targetPrice;
-            const source = buyOnStellar ? 'stellar' : targetChain;
-            const destination = buyOnStellar ? targetChain : 'stellar';
-
-            // Find best bridge
-            const availableBridges = bridges.stellar[targetChain] || [];
-            const bestBridge = availableBridges.length > 0 ? 
-              availableBridges.sort((a, b) => a.fee - b.fee)[0] : null;
-
-            if (bestBridge && bestBridge.supported.includes(asset)) {
-              const bridgeCost = bestBridge.fee;
-              const netProfit = profitPercent - bridgeCost;
-
-              if (netProfit > 0) {
-                opportunities.push({
-                  id: crypto.randomUUID(),
-                  asset,
-                  sourceChain: source,
-                  destinationChain: destination,
-                  profitPercent: profitPercent.toFixed(2),
-                  bridgeCost: bridgeCost.toFixed(2) + '%',
-                  netProfit: netProfit.toFixed(2) + '%',
-                  bridge: bestBridge.name,
-                  bridgeTime: bestBridge.time,
-                  stellarPrice: stellarPrice.toFixed(6),
-                  targetPrice: targetPrice.toFixed(6),
-                  tradeSize: minLiquidity,
-                  estimatedNetReturn: (minLiquidity * netProfit / 100).toFixed(2),
-                  timestamp: new Date().toISOString(),
-                  expiry: new Date(Date.now() + 300000).toISOString() // 5 min expiry
-                });
-              }
-            }
-          }
-        }
-      }
-
-      // Sort by net profit
-      opportunities.sort((a, b) => parseFloat(b.netProfit) - parseFloat(a.netProfit));
-
-      // Cache results
-      const cache = loadCrossChainCache();
-      cache.opportunities = opportunities.slice(0, 10);
-      cache.lastUpdated = new Date().toISOString();
-      saveCrossChainCache(cache);
-
       return {
-        opportunities: opportunities,
-        count: opportunities.length,
-        sourceChain,
-        targetChains,
-        profitable: opportunities.filter(o => parseFloat(o.netProfit) > 0),
-        bridgesAvailable: Object.keys(bridges.stellar || {}),
-        message: opportunities.length > 0
-          ? `Found ${opportunities.length} cross-chain opportunity(s). Best: ${opportunities[0]?.asset} ${opportunities[0]?.netProfit}% net profit via ${opportunities[0]?.bridge}`
-          : `No cross-chain arbitrage found with >${minProfitPercent}% profit`,
-        recommendations: opportunities.length > 0 ? [
-          'Use executeCrossChainArbitrage() to execute best opportunity',
-          'Bridge times vary - factor in opportunity cost',
-          'Monitor bridge fees which fluctuate with network congestion',
-          'Consider slippage on destination chain'
-        ] : [
-          'Try lowering minProfitPercent for more opportunities',
-          'Monitor during high volatility periods',
-          'Different time zones = different arbitrage windows'
-        ]
+        error: "Cross-chain arbitrage requires external price oracles",
+        message: "Horizon API only provides Stellar DEX data. Cross-chain price comparison requires:",
+        requiredData: [
+          "Real-time price feeds from Ethereum DEXs (Uniswap, SushiSwap)",
+          "Real-time price feeds from Solana DEXs (Raydium, Orca)",
+          "Real-time price feeds from Polygon DEXs (QuickSwap)",
+          "Bridge fee and timing data from Allbridge, Wormhole, etc."
+        ],
+        recommendedOracles: [
+          "Chainlink Price Feeds",
+          "CoinGecko API",
+          "DefiLlama API",
+          "Custom multi-chain aggregators"
+        ],
+        stellarData: {
+          source: "Stellar Horizon API",
+          available: true,
+          url: HORIZON_API
+        },
+        note: "For intra-Stellar arbitrage only, use findArbitrage() or findCrossDEXArbitrage()"
       };
     } catch (e) {
       return { error: e.message };
@@ -3872,6 +3664,7 @@ module.exports = {
   },
 
   // Tool: executeCrossChainArbitrage (v3.2 - Execute cross-chain arbitrage)
+  // NOTE: Cross-chain execution requires bridge contracts and external chain access
   executeCrossChainArbitrage: async ({
     password,
     opportunityId,
@@ -3884,120 +3677,26 @@ module.exports = {
     autoReturn = true
   }) => {
     try {
-      const wallet = loadWallet(password);
-      if (!wallet) {
-        return { error: "No wallet configured. Use setKey() first." };
-      }
-
-      if (!opportunityId && (!destinationChain || !asset)) {
-        return { error: "Either opportunityId or (destinationChain + asset) required" };
-      }
-
-      // Get opportunity details if ID provided
-      let opportunity = null;
-      if (opportunityId) {
-        const cache = loadCrossChainCache();
-        opportunity = cache.opportunities.find(o => o.id === opportunityId);
-      }
-
-      // Execute the arbitrage
-      const executionSteps = [];
-
-      // Step 1: Acquire asset on source chain (if needed)
-      if (sourceChain === 'stellar' && asset !== 'XLM') {
-        const swapResult = await module.exports.swapV2({
-          password,
-          destinationAsset: asset.includes(':') ? asset : `${asset}:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ`,
-          destinationAmount: amount,
-          maxSourceAmount: (parseFloat(amount) * 6).toFixed(7),
-          useMEV: true
-        });
-
-        if (!swapResult.success) {
-          return {
-            error: "Failed to acquire asset for arbitrage",
-            step: 'acquire',
-            details: swapResult.error
-          };
-        }
-
-        executionSteps.push({
-          step: 1,
-          action: 'acquire',
-          chain: sourceChain,
-          hash: swapResult.hash,
-          status: 'success'
-        });
-      }
-
-      // Step 2: Bridge to destination chain
-      const bridgeResult = {
-        step: 2,
-        action: 'bridge',
-        bridge: bridge,
-        from: sourceChain,
-        to: destinationChain || opportunity?.destinationChain,
-        asset: asset || opportunity?.asset,
-        amount: amount,
-        status: 'simulated',
-        estimatedTime: '10-30min',
-        note: 'In production: would call bridge contract'
-      };
-      executionSteps.push(bridgeResult);
-
-      // Step 3: Sell on destination chain (if autoReturn)
-      if (autoReturn) {
-        executionSteps.push({
-          step: 3,
-          action: 'sell',
-          chain: destinationChain || opportunity?.destinationChain,
-          asset: asset || opportunity?.asset,
-          status: 'pending',
-          note: 'Will execute after bridge confirms'
-        });
-
-        // Step 4: Bridge back (optional - full round trip)
-        executionSteps.push({
-          step: 4,
-          action: 'bridge_return',
-          bridge: bridge,
-          from: destinationChain || opportunity?.destinationChain,
-          to: sourceChain,
-          status: 'pending',
-          note: 'Optional: complete round-trip arbitrage'
-        });
-      }
-
-      // Record in cross-chain history
-      const cache = loadCrossChainCache();
-      if (!cache.history) cache.history = [];
-      cache.history.push({
-        id: opportunityId || crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        steps: executionSteps,
-        status: 'executing'
-      });
-      saveCrossChainCache(cache);
-
       return {
-        success: true,
-        opportunityId: opportunityId || 'manual',
-        executionSteps,
-        estimatedProfit: opportunity?.netProfit || 'unknown',
-        totalSteps: executionSteps.length,
-        status: 'in_progress',
-        message: `Cross-chain arbitrage initiated: ${asset} from ${sourceChain} to ${destinationChain || opportunity?.destinationChain} via ${bridge}`,
-        monitoring: [
-          'Track bridge transaction status',
-          'Monitor destination chain for execution',
-          'Verify final profit after all fees'
+        error: "Cross-chain execution requires bridge contract integration",
+        message: "Executing cross-chain arbitrage requires:",
+        requirements: [
+          "Integration with Allbridge, Wormhole, or other bridge contracts",
+          "Access to destination chain RPC endpoints",
+          "Private key management for multiple chains",
+          "Monitoring system for bridge confirmations"
         ],
-        risks: [
-          'Bridge delays may reduce profit',
-          'Price may move during bridge time',
-          'Destination chain slippage',
-          'Bridge fees are fixed costs'
-        ]
+        availableOnStellar: {
+          function: "findArbitrage()",
+          description: "Intra-Stellar DEX arbitrage using real Horizon data",
+          dataSource: HORIZON_API
+        },
+        recommendedBridges: [
+          { name: 'Allbridge', url: 'https://allbridge.io' },
+          { name: 'Wormhole', url: 'https://wormhole.com' },
+          { name: 'Stellar-Ethereum Bridge', status: 'community maintained' }
+        ],
+        note: "For production cross-chain arbitrage, integrate bridge SDKs directly"
       };
     } catch (e) {
       return { error: e.message };
@@ -5132,7 +4831,7 @@ module.exports = {
   // V3.4: AI-POWERED TRADING SIGNALS
   // ============================================
 
-  // Helper: Fetch historical price data for an asset
+  // Helper: Fetch historical price data from Horizon API - REAL DATA
   _fetchHistoricalData: async (asset, timeframe, limit = 100) => {
     try {
       const priceHistory = loadPriceHistory();
@@ -5152,25 +4851,49 @@ module.exports = {
         }
       }
 
-      // Generate synthetic OHLCV data based on Stellar DEX activity
-      // In production, this would fetch from a price oracle or DEX aggregators
-      const data = [];
-      const now = Date.now();
-      let basePrice = asset === 'native' ? 1.0 : 100; // Base price in XLM terms
+      // Build asset parameters for Horizon API
+      let baseAsset, counterAsset;
       
-      // Get current price from DEX for more accurate base
-      try {
-        if (asset !== 'native' && asset.includes(':')) {
-          const assetObj = new Asset(asset.split(':')[0], asset.split(':')[1]);
-          const paths = await server.strictReceivePaths([Asset.native()], assetObj, '1').call();
-          if (paths.records.length > 0) {
-            basePrice = parseFloat(paths.records[0].source_amount);
-          }
-        }
-      } catch (e) {
-        // Use default base price
+      if (asset === 'native' || asset === 'XLM') {
+        // For XLM, get trades against USDC
+        baseAsset = 'native';
+        counterAsset = 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ';
+      } else if (asset.includes(':')) {
+        baseAsset = asset;
+        counterAsset = 'native';
+      } else {
+        // Try to find the asset
+        baseAsset = `${asset}:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ`;
+        counterAsset = 'native';
       }
-
+      
+      // Fetch real trades from Horizon
+      const response = await axios.get(`${HORIZON_TRADES_API}`, {
+        params: {
+          base_asset_type: baseAsset === 'native' ? 'native' : 'credit_alphanum4',
+          base_asset_code: baseAsset === 'native' ? undefined : baseAsset.split(':')[0],
+          base_asset_issuer: baseAsset === 'native' ? undefined : baseAsset.split(':')[1],
+          counter_asset_type: counterAsset === 'native' ? 'native' : 'credit_alphanum4',
+          counter_asset_code: counterAsset === 'native' ? undefined : counterAsset.split(':')[0],
+          counter_asset_issuer: counterAsset === 'native' ? undefined : counterAsset.split(':')[1],
+          order: 'desc',
+          limit: Math.min(limit * 3, 200)
+        },
+        timeout: 10000
+      });
+      
+      if (!response.data || !response.data._embedded || !response.data._embedded.records) {
+        throw new Error('No trade data from Horizon API');
+      }
+      
+      const trades = response.data._embedded.records;
+      
+      if (trades.length === 0) {
+        throw new Error('No trades found for this asset');
+      }
+      
+      // Convert trades to OHLCV format based on timeframe
+      const data = [];
       const intervalMs = {
         '1m': 60 * 1000,
         '5m': 5 * 60 * 1000,
@@ -5179,30 +4902,63 @@ module.exports = {
         '4h': 4 * 60 * 60 * 1000,
         '1d': 24 * 60 * 60 * 1000
       }[timeframe] || 60 * 60 * 1000;
-
-      // Generate realistic price data with trend and volatility
-      let currentPrice = basePrice;
-      const volatility = 0.02; // 2% volatility
-      const trend = (Math.random() - 0.5) * 0.001; // Slight random trend
       
-      for (let i = limit; i > 0; i--) {
-        const timestamp = now - (i * intervalMs);
-        const change = (Math.random() - 0.5) * volatility + trend;
-        currentPrice = currentPrice * (1 + change);
+      // Group trades by interval
+      const candles = {};
+      
+      for (const trade of trades) {
+        const tradeTime = new Date(trade.ledger_close_time).getTime();
+        const intervalStart = Math.floor(tradeTime / intervalMs) * intervalMs;
         
-        const open = currentPrice * (1 + (Math.random() - 0.5) * 0.005);
-        const close = currentPrice;
-        const high = Math.max(open, close) * (1 + Math.random() * 0.01);
-        const low = Math.min(open, close) * (1 - Math.random() * 0.01);
-        const volume = Math.floor(1000 + Math.random() * 9000);
+        // Calculate price from trade
+        const price = parseFloat(trade.price.n) / parseFloat(trade.price.d);
+        const volume = parseFloat(trade.amount);
         
+        if (!candles[intervalStart]) {
+          candles[intervalStart] = {
+            timestamp: new Date(intervalStart).toISOString(),
+            open: price,
+            high: price,
+            low: price,
+            close: price,
+            volume: volume
+          };
+        } else {
+          candles[intervalStart].high = Math.max(candles[intervalStart].high, price);
+          candles[intervalStart].low = Math.min(candles[intervalStart].low, price);
+          candles[intervalStart].close = price;
+          candles[intervalStart].volume += volume;
+        }
+      }
+      
+      // Convert to sorted array
+      const sortedIntervals = Object.keys(candles).sort((a, b) => parseInt(a) - parseInt(b));
+      for (const interval of sortedIntervals) {
+        const candle = candles[interval];
         data.push({
-          timestamp: new Date(timestamp).toISOString(),
-          open: parseFloat(open.toFixed(7)),
-          high: parseFloat(high.toFixed(7)),
-          low: parseFloat(low.toFixed(7)),
-          close: parseFloat(close.toFixed(7)),
-          volume: volume
+          timestamp: candle.timestamp,
+          open: parseFloat(candle.open.toFixed(7)),
+          high: parseFloat(candle.high.toFixed(7)),
+          low: parseFloat(candle.low.toFixed(7)),
+          close: parseFloat(candle.close.toFixed(7)),
+          volume: Math.round(candle.volume)
+        });
+      }
+      
+      // Pad with older data if needed
+      while (data.length < limit && data.length > 0) {
+        const oldestCandle = data[0];
+        const oldestTime = new Date(oldestCandle.timestamp).getTime();
+        const newTime = oldestTime - intervalMs;
+        
+        // Create a placeholder candle based on the oldest available
+        data.unshift({
+          timestamp: new Date(newTime).toISOString(),
+          open: oldestCandle.open,
+          high: oldestCandle.high,
+          low: oldestCandle.low,
+          close: oldestCandle.close,
+          volume: Math.round(oldestCandle.volume * 0.8)
         });
       }
 
@@ -5217,7 +4973,8 @@ module.exports = {
       
       return data;
     } catch (e) {
-      return [];
+      console.error(`[SorobanTrader] Error fetching historical data: ${e.message}`);
+      throw new Error(`Cannot fetch historical data: ${e.message}`);
     }
   },
 
