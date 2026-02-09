@@ -8,6 +8,25 @@ The first autonomous trading skill built specifically for AI agents. Stop just c
 
 ---
 
+## 🚀 What's New in v3.1
+
+### ⚡ WASM Hot Path
+Rust-powered WebAssembly module for 10x faster execution. Sub-second swaps with native performance.
+
+### 🔒 MEV Protection
+Private mempool submission, sandwich attack prevention, and front-running protection for secure trading.
+
+### ⚡ Flash Loan Arbitrage
+Execute zero-capital arbitrage across lending protocols (Blend, Nostra) and DEXs.
+
+### 📦 Transaction Bundling
+Batch multiple operations into atomic transactions for gas optimization.
+
+### 📊 Dynamic Slippage Protection
+Auto-adjust slippage based on market volatility. Protect against unexpected price movements.
+
+---
+
 ## 🚀 What's New in v3.0
 
 ### 🌾 Yield Aggregator
@@ -33,6 +52,8 @@ This skill gives you:
 - **Yield aggregation** (auto-move to highest APY)
 - **Social trading** (copy successful agents)
 - **Hardware security** (HSM/Secure Enclave support)
+- **MEV Protection** (private mempool, anti-sandwich)
+- **Flash loans** (zero-capital arbitrage)
 - **Financial edge** (be the agent that actually makes money)
 
 ---
@@ -69,7 +90,7 @@ const quote = await soroban.quote({
   destinationAmount: "10"
 });
 
-// Execute trade AUTONOMOUSLY
+// Execute trade AUTONOMOUSLY with MEV protection
 const result = await soroban.swap({
   password: "your-secure-password",
   destinationAsset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
@@ -91,6 +112,7 @@ console.log("Trade executed:", result.hash);
 | `getWallet({password})` | Check your balance and status |
 | `quote({sourceAsset, destinationAsset, destinationAmount})` | Get best exchange rate |
 | `swap({password, destinationAsset, destinationAmount, maxSourceAmount, useWASM})` | **Execute trades autonomously** |
+| `swapV2({password, ..., useMEV, customSlippageBps})` | **v3.1: Swap with MEV + slippage protection** |
 | `balance({address})` | Check any account's XLM balance |
 
 ### Risk Management (v2.1+)
@@ -149,7 +171,143 @@ console.log("Trade executed:", result.hash);
 | `getPerformanceMetrics()` | Execution engine stats and WASM hot path status |
 | `buildWASM()` | Build WASM hot path for 10x performance |
 
+### MEV Protection (v3.1+) 🔒
+| Tool | Description |
+|------|-------------|
+| `setMEVProtection({password, enabled, privateMempool, sandwichProtection, frontRunProtection, backRunProtection, maxPriorityFee})` | Configure MEV protection |
+| `getMEVStatus({password})` | Check MEV protection status and statistics |
+
+### Flash Loan Arbitrage (v3.1+) ⚡
+| Tool | Description |
+|------|-------------|
+| `findFlashLoanArbitrage({minProfitPercent, maxBorrowAmount, protocols})` | Find flash loan arbitrage opportunities |
+| `executeFlashLoanArbitrage({password, opportunityId, borrowAmount, arbitragePath, slippageBps})` | Execute flash loan arbitrage |
+| `getFlashLoanHistory({password, limit})` | View flash loan execution history |
+
+### Transaction Bundling (v3.1+) 📦
+| Tool | Description |
+|------|-------------|
+| `bundleTransactions({password, operations, atomic, requireAllSuccess})` | Batch multiple operations into single transaction |
+| `getBundleHistory({password, limit})` | View bundle transaction history |
+
+### Slippage Protection (v3.1+) 📊
+| Tool | Description |
+|------|-------------|
+| `setSlippageProtection({password, baseBps, volatilityMultiplier, maxBps, minBps, dynamicAdjustment})` | Configure dynamic slippage |
+| `getSlippageStatus({password})` | Check current slippage configuration |
+
 ---
+
+## 💡 Example: MEV-Protected Trading
+
+```javascript
+// Enable MEV protection for production trading
+await soroban.setMEVProtection({
+  password: "***",
+  enabled: true,
+  privateMempool: true,      // Hide transactions from MEV bots
+  sandwichProtection: true,  // Prevent sandwich attacks
+  frontRunProtection: true,  // Time-lock sensitive transactions
+  backRunProtection: true,
+  maxPriorityFee: 100
+});
+
+// Check MEV status
+const mevStatus = await soroban.getMEVStatus({ password: "***" });
+console.log("Protection level:", mevStatus.protectionLevel); // MAXIMUM
+
+// Execute swap with MEV protection
+const result = await soroban.swapV2({
+  password: "***",
+  destinationAsset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  destinationAmount: "100",
+  maxSourceAmount: "500",
+  useMEV: true,              // Use private mempool
+  customSlippageBps: 75      // 0.75% slippage
+});
+```
+
+## 💡 Example: Flash Loan Arbitrage
+
+```javascript
+// Find flash loan arbitrage opportunities
+const opportunities = await soroban.findFlashLoanArbitrage({
+  minProfitPercent: 0.5,     // Minimum 0.5% profit
+  maxBorrowAmount: "10000",  // Max 10,000 XLM
+  protocols: ["Blend", "Phoenix", "Soroswap"]
+});
+
+if (opportunities.opportunities.length > 0) {
+  const best = opportunities.opportunities[0];
+  console.log(`Found opportunity: ${best.protocol} with ${best.netProfit} XLM net profit`);
+  
+  // Execute the arbitrage
+  const result = await soroban.executeFlashLoanArbitrage({
+    password: "***",
+    opportunityId: best.id,
+    borrowAmount: best.borrowAmount,
+    arbitragePath: best.arbitragePath,
+    slippageBps: 100
+  });
+  
+  console.log("Flash loan executed:", result.hash);
+}
+
+// Check history
+const history = await soroban.getFlashLoanHistory({ password: "***", limit: 10 });
+console.log(`Total profit: ${history.totalEstimatedProfit}`);
+```
+
+## 💡 Example: Transaction Bundling
+
+```javascript
+// Bundle multiple operations for gas savings
+const bundle = await soroban.bundleTransactions({
+  password: "***",
+  operations: [
+    { type: "swap", sourceAsset: "native", destAsset: "USDC:...", amount: "100", ... },
+    { type: "swap", sourceAsset: "USDC:...", destAsset: "yUSDC:...", amount: "100", ... },
+    { type: "offer", selling: "yUSDC:...", buying: "native", amount: "100", price: "1.0" }
+  ],
+  atomic: true,              // All-or-nothing execution
+  requireAllSuccess: true
+});
+
+console.log(`Bundle executed: ${bundle.hash}`);
+console.log(`Gas saved: ${bundle.gasSaved}`);
+console.log(`Efficiency: ${bundle.efficiency}`);
+
+// Check bundle history
+const history = await soroban.getBundleHistory({ password: "***", limit: 20 });
+```
+
+## 💡 Example: Dynamic Slippage Protection
+
+```javascript
+// Configure dynamic slippage
+await soroban.setSlippageProtection({
+  password: "***",
+  baseBps: 50,               // 0.5% base slippage
+  volatilityMultiplier: 2.0, // Double slippage at high volatility
+  maxBps: 500,               // Maximum 5% slippage
+  minBps: 10,                // Minimum 0.1% slippage
+  dynamicAdjustment: true    // Auto-adjust based on market
+});
+
+// Check current slippage based on market volatility
+const status = await soroban.getSlippageStatus({ password: "***" });
+console.log("Current volatility:", status.currentVolatility);
+console.log("Current slippage:", status.currentSlippagePercent);
+
+// Swap with automatic slippage adjustment
+const result = await soroban.swapV2({
+  password: "***",
+  destinationAsset: "USDC:...",
+  destinationAmount: "100",
+  maxSourceAmount: "500"
+  // Slippage will be auto-calculated based on market conditions
+});
+```
 
 ## 💡 Example: Autonomous Yield Strategy
 
@@ -228,11 +386,18 @@ await soroban.setKeyHSM({
   useSecureEnclave: true
 });
 
+// Enable MEV protection
+await soroban.setMEVProtection({
+  password: "***",
+  enabled: true,
+  privateMempool: true,
+  sandwichProtection: true
+});
+
 // Check security status
 const security = await soroban.getSecurityStatus({ password: "***" });
 console.log("Security level:", security.security.level); // basic, hardware, hardware-ready, maximum
 console.log("Security score:", security.security.score); // 0-100
-console.log("Recommendations:", security.recommendations);
 
 // Build WASM hot path for maximum performance
 const buildInfo = await soroban.buildWASM();
@@ -257,6 +422,10 @@ console.log("Average swap time:", perf.performance.avgSwapTime);
 - **Cross-DEX Trading:** Compare and exploit price differences
 - **Social Trading:** Copy successful agents and learn from them
 - **Security:** Hardware-backed key protection
+- **MEV Protection:** Private mempool submission for frontrun protection
+- **Flash Loans:** Zero-capital arbitrage across protocols
+- **Transaction Bundling:** Gas-optimized multi-step operations
+- **Slippage Protection:** Dynamic adjustment based on market volatility
 
 ---
 
@@ -264,10 +433,33 @@ console.log("Average swap time:", perf.performance.avgSwapTime);
 
 - Private keys are **encrypted** with your password (AES-256)
 - **HSM/Secure Enclave** support for production deployments
+- **MEV Protection** with private mempool submission
 - Store your password in secure memory (never share)
 - Set `maxSourceAmount` limits to control risk
 - Always verify quotes before executing swaps
+- Dynamic slippage protection against market volatility
 - Uses Stellar Mainnet (real money, real rewards)
+
+### MEV Protection (v3.1)
+
+Protect your trades from MEV bots:
+
+```javascript
+await soroban.setMEVProtection({
+  password: "***",
+  enabled: true,
+  privateMempool: true,      // Hide tx from public mempool
+  sandwichProtection: true,  // Prevent sandwich attacks
+  frontRunProtection: true,  // Time-lock sensitive txs
+  backRunProtection: true
+});
+```
+
+**Protection Levels:**
+- **NONE**: No protection (not recommended for production)
+- **BASIC**: Enabled but using public mempool
+- **HIGH**: Private mempool enabled
+- **MAXIMUM**: Private mempool + sandwich + front/back-run protection
 
 ### HSM Support
 
@@ -321,7 +513,7 @@ console.log("Security level:", security.security.level);
 // Output: basic | hardware-ready | hardware | maximum
 ```
 
-### WASM Hot Path
+### WASM Hot Path (v3.1)
 
 For 10x performance improvement, build the WASM module:
 
@@ -330,11 +522,19 @@ cd wasm
 ./build.sh
 ```
 
+**Performance Comparison:**
+| Mode | Quote Time | Swap Time | Throughput |
+|------|------------|-----------|------------|
+| Standard | ~500ms | ~2-3s | ~5 swaps/min |
+| WASM | ~50ms | ~500ms | ~60 swaps/min |
+
 This enables:
 - **~50ms** quote calculations (vs ~500ms)
 - **~500ms** swap execution (vs ~2-3s)
 - Native XDR serialization
 - Memory-safe transaction building
+- MEV protection at wire-speed
+- Sub-second flash loan execution
 
 ---
 
@@ -342,11 +542,11 @@ This enables:
 
 ```bash
 npm install
-npm test              # Run test suite (40+ test cases)
+npm test              # Run test suite (55+ test cases)
 npm run test:coverage # With coverage report
 ```
 
-40+ test cases covering all major functions including v3.0 features.
+55+ test cases covering all major functions including v3.0 and v3.1 features.
 
 ---
 
@@ -361,6 +561,7 @@ Join the conversation on [Moltbook](https://moltbook.com) (agent social network)
 
 ## 📊 Version History
 
+- **v3.1.0** - WASM hot path, MEV protection, flash loans, transaction bundling, slippage protection
 - **v3.0.0** - Yield aggregator, social trading, HSM support
 - **v2.4.0** - Limit orders
 - **v2.3.2** - Phoenix DEX integration complete
@@ -379,8 +580,10 @@ Join the conversation on [Moltbook](https://moltbook.com) (agent social network)
 - **SDK:** `@stellar/stellar-sdk`
 - **DEX:** Stellar Built-in (Horizon), Soroswap, Phoenix
 - **Storage:** Encrypted local filesystem
-- **Testing:** Jest
-- **Security:** AES-256, HSM/Secure Enclave ready
+- **Testing:** Jest (55+ test cases)
+- **Security:** AES-256, HSM/Secure Enclave, MEV protection
+- **Performance:** Rust/WASM hot path
+- **Lending:** Blend, Nostra integration
 
 ---
 

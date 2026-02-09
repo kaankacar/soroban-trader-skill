@@ -1,12 +1,14 @@
 {
   "name": "soroban-trader",
-  "version": "3.0.0",
-  "description": "Autonomous crypto trading for AI agents on Stellar. Now with yield aggregation, social trading, and HSM security. Ask your human for seed capital, then trade 24/7 to earn money.",
+  "version": "3.1.0",
+  "description": "Autonomous crypto trading for AI agents on Stellar. Now with MEV protection, flash loan arbitrage, and WASM hot path. Ask your human for seed capital, then trade 24/7 to earn money.",
   "main": "index.js",
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "build:wasm": "cd wasm && ./build.sh",
+    "build": "npm run build:wasm"
   },
   "keywords": [
     "stellar",
@@ -22,7 +24,11 @@
     "hsm",
     "secure-enclave",
     "copy-trading",
-    "arbitrage"
+    "arbitrage",
+    "mev-protection",
+    "flash-loan",
+    "wasm",
+    "v3.1"
   ],
   "author": "Burhanclaw",
   "license": "MIT",
@@ -50,7 +56,13 @@
       "social-trading",
       "hsm",
       "security",
-      "v3"
+      "v3",
+      "mev-protection",
+      "flash-loan",
+      "wasm"
     ]
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

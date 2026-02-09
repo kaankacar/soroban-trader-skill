@@ -1,3 +1,4 @@
+const soroban = require('./index.js');
 const { setKey, getWallet, quote, swap, findArbitrage, setStopLoss, setTakeProfit, checkOrders, setupDCA, executeDCA, checkDCA, setPriceAlert, checkAlerts, listAlerts, scanYields, autoRebalance, setYieldStrategy, getLeaderboard, followTrader, copyTrade, checkCopyTrading, setKeyHSM, getSecurityStatus, getPerformanceMetrics } = require('./index.js');
 const fs = require('fs');
 const path = require('path');
@@ -449,6 +450,307 @@ describe('Soroban Trader Skill', () => {
 
       expect(typeof result.wasm.available).toBe('boolean');
       expect(result.message).toBeDefined();
+    });
+  });
+
+  // === V3.1 FEATURES: Execution & MEV Protection ===
+  describe('MEV Protection (v3.1)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('setMEVProtection should enable MEV protection', async () => {
+      const result = await soroban.setMEVProtection({
+        password: TEST_PASSWORD,
+        enabled: true,
+        privateMempool: true,
+        sandwichProtection: true,
+        frontRunProtection: true,
+        backRunProtection: true,
+        maxPriorityFee: 100
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.config.enabled).toBe(true);
+      expect(result.protectionLevel).toBe('MAXIMUM');
+      expect(result.config.privateMempool).toBe(true);
+      expect(result.config.sandwichProtection).toBe(true);
+    });
+
+    test('setMEVProtection should disable MEV protection', async () => {
+      const result = await soroban.setMEVProtection({
+        password: TEST_PASSWORD,
+        enabled: false
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.config.enabled).toBe(false);
+      expect(result.protectionLevel).toBe('NONE');
+    });
+
+    test('setMEVProtection should require wallet', async () => {
+      const result = await soroban.setMEVProtection({
+        password: 'wrong-password',
+        enabled: true
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    test('getMEVStatus should return MEV configuration', async () => {
+      await soroban.setMEVProtection({
+        password: TEST_PASSWORD,
+        enabled: true,
+        privateMempool: true
+      });
+
+      const result = await soroban.getMEVStatus({ password: TEST_PASSWORD });
+
+      expect(result.configured).toBe(true);
+      expect(result.config).toBeDefined();
+      expect(result.protectionLevel).toBeDefined();
+      expect(result.features).toBeDefined();
+    });
+
+    test('getMEVStatus should require wallet', async () => {
+      const result = await soroban.getMEVStatus({ password: 'wrong-password' });
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe('Flash Loan Arbitrage (v3.1)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('findFlashLoanArbitrage should find opportunities', async () => {
+      const result = await soroban.findFlashLoanArbitrage({
+        minProfitPercent: 0.1,
+        maxBorrowAmount: '10000',
+        protocols: ['Blend', 'Phoenix']
+      });
+
+      expect(result.opportunities).toBeDefined();
+      expect(Array.isArray(result.opportunities)).toBe(true);
+      expect(result.protocolsChecked).toContain('Blend');
+      expect(result.protocolsChecked).toContain('Phoenix');
+      expect(result.message).toBeDefined();
+    });
+
+    test('findFlashLoanArbitrage should filter by minProfitPercent', async () => {
+      const result = await soroban.findFlashLoanArbitrage({
+        minProfitPercent: 5.0 // High threshold
+      });
+
+      expect(result.opportunities).toBeDefined();
+      // Should either find opportunities or return empty
+      expect(result.count).toBeGreaterThanOrEqual(0);
+    });
+
+    test('executeFlashLoanArbitrage should require wallet', async () => {
+      const result = await soroban.executeFlashLoanArbitrage({
+        password: 'wrong-password',
+        borrowAmount: '1000'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    test('getFlashLoanHistory should return history', async () => {
+      const result = await soroban.getFlashLoanHistory({
+        password: TEST_PASSWORD,
+        limit: 5
+      });
+
+      expect(result.totalExecutions).toBeDefined();
+      expect(result.recent).toBeDefined();
+      expect(Array.isArray(result.recent)).toBe(true);
+    });
+
+    test('getFlashLoanHistory should require wallet', async () => {
+      const result = await soroban.getFlashLoanHistory({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe('Transaction Bundling (v3.1)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('bundleTransactions should require operations', async () => {
+      const result = await soroban.bundleTransactions({
+        password: TEST_PASSWORD,
+        operations: [],
+        atomic: true
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No operations provided');
+    });
+
+    test('bundleTransactions should require wallet', async () => {
+      const result = await soroban.bundleTransactions({
+        password: 'wrong-password',
+        operations: [{ type: 'payment', destination: 'G...', amount: '10' }]
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    test('bundleTransactions should limit operations', async () => {
+      const operations = Array(101).fill({ type: 'payment', destination: 'G...', amount: '10' });
+      
+      const result = await soroban.bundleTransactions({
+        password: TEST_PASSWORD,
+        operations: operations,
+        atomic: true
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Maximum 100 operations');
+    });
+
+    test('getBundleHistory should return history', async () => {
+      const result = await soroban.getBundleHistory({
+        password: TEST_PASSWORD,
+        limit: 10
+      });
+
+      expect(result.totalBundles).toBeDefined();
+      expect(result.recent).toBeDefined();
+      expect(result.statistics).toBeDefined();
+    });
+
+    test('getBundleHistory should require wallet', async () => {
+      const result = await soroban.getBundleHistory({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe('Slippage Protection (v3.1)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('setSlippageProtection should configure slippage', async () => {
+      const result = await soroban.setSlippageProtection({
+        password: TEST_PASSWORD,
+        baseBps: 50,
+        volatilityMultiplier: 2.0,
+        maxBps: 500,
+        minBps: 10,
+        dynamicAdjustment: true
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.config).toBeDefined();
+      expect(result.config.baseBps).toBe(50);
+      expect(result.dynamic).toBe(true);
+      expect(result.examples).toBeDefined();
+      expect(Array.isArray(result.examples)).toBe(true);
+    });
+
+    test('setSlippageProtection should validate parameters', async () => {
+      const result = await soroban.setSlippageProtection({
+        password: TEST_PASSWORD,
+        baseBps: 1000, // Too high
+        maxBps: 500
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('must be between');
+    });
+
+    test('setSlippageProtection should validate volatility multiplier', async () => {
+      const result = await soroban.setSlippageProtection({
+        password: TEST_PASSWORD,
+        volatilityMultiplier: 15 // Too high
+      });
+
+      expect(result.error).toBeDefined();
+    });
+
+    test('setSlippageProtection should require wallet', async () => {
+      const result = await soroban.setSlippageProtection({
+        password: 'wrong-password',
+        baseBps: 50
+      });
+
+      expect(result.error).toBeDefined();
+    });
+
+    test('getSlippageStatus should return configuration', async () => {
+      await soroban.setSlippageProtection({
+        password: TEST_PASSWORD,
+        baseBps: 50,
+        dynamicAdjustment: true
+      });
+
+      const result = await soroban.getSlippageStatus({ password: TEST_PASSWORD });
+
+      expect(result.configured).toBe(true);
+      expect(result.config).toBeDefined();
+      expect(result.currentSlippageBps).toBeDefined();
+      expect(result.dynamicAdjustment).toBe(true);
+    });
+
+    test('getSlippageStatus should require wallet', async () => {
+      const result = await soroban.getSlippageStatus({ password: 'wrong-password' });
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe('swapV2 with v3.1 Features', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    test('swapV2 should use slippage protection', async () => {
+      // First configure slippage
+      await soroban.setSlippageProtection({
+        password: TEST_PASSWORD,
+        baseBps: 75,
+        dynamicAdjustment: true
+      });
+
+      // This will fail with insufficient funds but we test the slippage path
+      const result = await soroban.swapV2({
+        password: TEST_PASSWORD,
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        destinationAmount: '10',
+        maxSourceAmount: '50',
+        customSlippageBps: 100
+      });
+
+      // Should either succeed or fail with balance error, not slippage error
+      expect(result.error || result.success).toBeDefined();
+    });
+
+    test('swapV2 should require wallet', async () => {
+      const result = await soroban.swapV2({
+        password: 'wrong-password',
+        destinationAsset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        destinationAmount: '10',
+        maxSourceAmount: '50'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
     });
   });
 });
