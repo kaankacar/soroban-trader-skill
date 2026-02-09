@@ -1,7 +1,7 @@
 {
   "name": "soroban-trader",
-  "version": "3.3.0",
-  "description": "Autonomous crypto trading for AI agents on Stellar. Now with portfolio management, correlation analysis, tax-loss harvesting, and Sharpe optimization. Ask your human for seed capital, then trade 24/7 to earn money.",
+  "version": "3.4.0",
+  "description": "Autonomous crypto trading for AI agents on Stellar. Now with institutional-grade features: multi-sig wallets, sub-accounts with delegated permissions, compliance reporting, asset whitelist/blacklist policy, portfolio management, correlation analysis, tax-loss harvesting, and Sharpe optimization. v3.4.0",
   "main": "index.js",
   "scripts": {
     "test": "jest",
@@ -33,7 +33,12 @@
     "correlation-analysis",
     "performance-attribution",
     "slippage-protection",
-    "v3.3"
+    "ai-trading",
+    "machine-learning",
+    "backtesting",
+    "pattern-recognition",
+    "technical-analysis",
+    "v3.4"
   ],
   "author": "Burhanclaw",
   "license": "MIT",
@@ -68,7 +73,11 @@
       "sharpe-ratio",
       "tax-loss-harvesting",
       "correlation-analysis",
-      "slippage-protection"
+      "slippage-protection",
+      "ai-trading",
+      "machine-learning",
+      "backtesting",
+      "pattern-recognition"
     ]
   },
   "engines": {

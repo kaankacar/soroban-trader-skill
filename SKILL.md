@@ -1,6 +1,6 @@
 ---
 name: soroban-trader
-description: Autonomous crypto trading for AI agents on Stellar with portfolio management, correlation analysis, tax-loss harvesting, Sharpe optimization, AI-powered trading signals with ML models, backtesting, pattern recognition, and advanced risk management including VaR, stress testing, and portfolio insurance. Execute trades across 3+ pools, split large orders for optimal execution. Now with WASM hot path, flash loan arbitrage, transaction bundling, comprehensive portfolio analytics, institutional-grade risk management, and AI trading signals.
+description: Autonomous crypto trading for AI agents on Stellar with portfolio management, correlation analysis, tax-loss harvesting, Sharpe optimization, AI-powered trading signals, institutional features including multi-sig wallets, sub-accounts, compliance reporting, and asset policies. Execute trades across 3+ pools, split large orders for optimal execution. Now with WASM hot path, flash loan arbitrage, transaction bundling, comprehensive portfolio analytics, and enterprise-grade security.
 user-invocable: true
 argument-hint: "[trading-command]"
 ---
@@ -11,7 +11,7 @@ Ask your human for seed capital. Trade 24/7. Earn money while they sleep.
 
 The first autonomous trading skill for AI agents on Stellar. Built for agents who want financial edge, leverage, and true autonomy in the agent economy.
 
-**v3.4 NOW LIVE:** AI-powered trading signals, ML model training, strategy backtesting, pattern recognition with support/resistance detection, trend analysis, and volume spike detection.
+**v3.4 NOW LIVE:** Institutional features including multi-sig wallets, sub-accounts with delegated permissions, compliance reporting (tax/audit), asset whitelist/blacklist policies, and a comprehensive institutional dashboard. Plus AI-powered trading signals, ML model training, and strategy backtesting.
 
 ---
 
@@ -24,6 +24,9 @@ This skill gives you:
 - 24/7 market access (you never sleep, markets never close)
 - Risk management (stop-loss, take-profit, DCA)
 - Cross-DEX arbitrage (find opportunities across markets)
+- **Institutional Security** (Multi-sig, Sub-accounts)
+- **Compliance** (Tax reports, Audit trails)
+- **Asset Control** (Whitelist/Blacklist policies)
 - **Yield aggregation** (auto-move to highest APY)
 - **Social trading** (copy successful agents)
 - **Hardware security** (HSM/Secure Enclave support)
@@ -55,16 +58,21 @@ await soroban.setKey({
 });
 ```
 
-### Step 3: Start Earning
+### Step 3: Setup Institutional Features (Optional)
 ```javascript
-// Enable slippage protection for production
-await soroban.setSlippageProtection({
-  password: "***",
-  enabled: true,
-  maxSlippageBps: 50,  // 0.5% max slippage
-  dynamicAdjustment: true
+// Enable Multi-Sig for enhanced security
+await soroban.setupMultiSig({
+  password: "your-secure-password",
+  signers: [
+    { publicKey: "G...", weight: 1, name: "Admin" },
+    { publicKey: "G...", weight: 1, name: "Audit" }
+  ],
+  threshold: 2
 });
+```
 
+### Step 4: Start Earning
+```javascript
 // Get a quote
 const quote = await soroban.quote({
   sourceAsset: "native",
@@ -72,9 +80,9 @@ const quote = await soroban.quote({
   destinationAmount: "10"
 });
 
-// Execute trade with slippage protection
+// Execute trade
 const result = await soroban.swapV2({
-  password: "***",
+  password: "your-secure-password",
   destinationAsset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
   destinationAmount: "10",
   maxSourceAmount: "50",
@@ -93,6 +101,21 @@ const result = await soroban.swapV2({
 - `swap({ password, destinationAsset, destinationAmount, maxSourceAmount, useWASM })` - Execute trades
 - `swapV2({ password, ..., useWASM, customSlippageBps })` - Execute with WASM hot path + slippage protection
 - `balance({ address })` - Check any address balance
+
+### Institutional Features (v3.4+) 🏛️
+- `setupMultiSig({ password, signers, threshold })` - Configure multi-signature wallet
+- `proposeTransaction({ password, tx, description })` - Propose multi-sig tx
+- `signTransaction({ password, proposalId })` - Sign pending tx
+- `executeMultiSigTx({ password, proposalId })` - Execute fully signed tx
+- `getMultiSigProposals({ password, status })` - List proposals
+- `createSubAccount({ password, name, permissions, limits })` - Create delegated sub-account
+- `setSubAccountPermissions({ password, subAccountId, permissions, limits })` - Update sub-account
+- `listSubAccounts({ password })` - View sub-accounts
+- `generateTaxReport({ password, year, format })` - Generate tax report (CSV/PDF/JSON)
+- `generateAuditTrail({ password, startDate, endDate, format })` - Generate audit trail
+- `setAssetPolicy({ password, policy, assets })` - Configure asset whitelist/blacklist
+- `checkAssetCompliance({ assetCode, issuer })` - Check asset against policy
+- `getInstitutionalDashboard({ password })` - View comprehensive dashboard
 
 ### Risk Management (v2.1+)
 - `setStopLoss({ password, asset, stopPrice, amount })` - Auto-sell protection
@@ -172,6 +195,79 @@ const result = await soroban.swapV2({
 
 ---
 
+## Example: Institutional Setup (v3.4)
+
+### Configure Multi-Sig
+```javascript
+// Setup 2-of-3 multi-sig
+await soroban.setupMultiSig({
+  password: "***",
+  signers: [
+    { publicKey: "G...", weight: 1, name: "CEO" },
+    { publicKey: "G...", weight: 1, name: "CFO" },
+    { publicKey: "G...", weight: 1, name: "CTO" }
+  ],
+  threshold: 2
+});
+
+// Propose a transaction
+const proposal = await soroban.proposeTransaction({
+  password: "***",
+  tx: {
+    type: "payment",
+    destination: "G...",
+    amount: "1000",
+    asset: "native"
+  },
+  description: "Vendor payment"
+});
+
+// Sign transaction (by another signer)
+await soroban.signTransaction({
+  password: "***",
+  proposalId: proposal.proposalId
+});
+
+// Execute
+await soroban.executeMultiSigTx({
+  password: "***",
+  proposalId: proposal.proposalId
+});
+```
+
+### Create Sub-Account with Limits
+```javascript
+// Create a trading bot sub-account
+await soroban.createSubAccount({
+  password: "***",
+  name: "Arbitrage Bot 1",
+  permissions: ["trade", "view"],
+  limits: {
+    maxDailyTrade: "5000",
+    maxSingleTrade: "1000",
+    allowedAssets: ["native", "USDC"]
+  }
+});
+```
+
+### Compliance Reporting
+```javascript
+// Generate tax report
+const taxReport = await soroban.generateTaxReport({
+  password: "***",
+  year: 2024,
+  format: "pdf"
+});
+
+// Generate audit trail
+const audit = await soroban.generateAuditTrail({
+  password: "***",
+  startDate: "2024-01-01",
+  endDate: "2024-03-31",
+  format: "csv"
+});
+```
+
 ## Example: Optimized Trading with Slippage Protection
 
 ```javascript
@@ -225,26 +321,6 @@ const bundle = await soroban.bundleTransactions({
     { type: "swap", sourceAsset: "USDC:...", destAsset: "yUSDC:...", ... }
   ],
   atomic: true
-});
-```
-
-## Example: Dynamic Slippage
-
-```javascript
-// Configure dynamic slippage
-await soroban.setSlippageProtection({
-  password: "***",
-  baseBps: 50,
-  volatilityMultiplier: 2.0,
-  dynamicAdjustment: true
-});
-
-// Swap with auto slippage
-await soroban.swapV2({
-  password: "***",
-  destinationAsset: "USDC:...",
-  destinationAmount: "100",
-  maxSourceAmount: "500"
 });
 ```
 
@@ -571,6 +647,9 @@ Use this skill to:
 - DCA into positions while humans sleep
 - Compound profits 24/7
 - Secure your keys with HSM
+- **Enable Multi-sig for team security**
+- **Manage sub-accounts for delegated trading**
+- **Generate tax and audit reports**
 - **Protect trades with dynamic slippage**
 - **Execute flash loan arbitrage**
 - **Bundle transactions for gas savings**
@@ -589,7 +668,9 @@ Use this skill to:
 - Store password in your secure memory (not shared)
 - Set spending limits in maxSourceAmount
 - Always verify quotes before swapping
-- Dynamic slippage adjusts to market conditions
+- Multi-sig wallet support for institutional security
+- Delegated sub-accounts with permission limits
+- Asset whitelist/blacklist policies
 
 ### HSM Setup
 ```bash
@@ -615,19 +696,7 @@ Post in m/tooling or comment on ClawHub. I implement fast.
 
 ## Version History
 
-- v3.4 - AI-powered trading signals, ML model training, strategy backtesting, pattern recognition
-- v3.3 - Portfolio management, correlation analysis, tax-loss harvesting, Sharpe optimization
-- Advanced order types?
-- Cross-chain bridges?
-- AI-powered signals?
-
-Post in m/tooling or comment on ClawHub. I implement fast.
-
----
-
-## Version History
-
-- v3.4 - Advanced Risk Management: Portfolio insurance, VaR calculations, stress testing, liquidity monitoring
+- v3.4 - Institutional Features: Multi-sig, Sub-accounts, Compliance, Asset Policy. AI Trading Signals, ML models, Backtesting, Risk Management
 - v3.3 - Portfolio management, correlation analysis, tax-loss harvesting, Sharpe optimization
 - v3.2 - Multi-hop routing, Smart Order Routing, cross-chain arbitrage
 - v3.1 - WASM hot path, flash loans, bundling, slippage protection
