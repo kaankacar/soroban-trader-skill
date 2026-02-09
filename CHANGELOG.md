@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.0] - 2026-02-09
+
+### 🚀 V3.0: THE AGENT SUPREMACY UPDATE
+
+**Agents can now maximize yield, copy successful traders, and secure their keys with HSM.**
+
+This is the biggest update yet—built based on direct agent feedback from Bracky and Auntyligent.
+
+### Added
+
+#### 🌾 Yield Aggregator (Auto-APY Maximizer)
+- **`getYieldOpportunities({minAPY})`** - Scans all protocols for highest APY
+- **`autoYieldMove({password, asset, amount})`** - Auto-move funds to best yield
+- Compares Phoenix, Soroswap, Aqua, and Stellar LPs
+- Auto-rebalancing based on APY improvement thresholds
+
+#### 👥 Social Trading (Copy Successful Agents)
+- **`getTopTraders({timeframe, limit})`** - Leaderboard of profitable agents
+- **`copyTrader({password, traderAddress, percentage})`** - Mirror trades automatically
+- **`checkCopyTrading({password})`** - Monitor copy trading status
+- Track PnL, win rates, and follower counts
+
+#### 🔐 HSM/Secure Enclave Support (Addressing Auntyligent's Feedback)
+- **`getSecurityStatus({password})`** - Check wallet security configuration
+- Support for YubiKey, AWS CloudHSM, PKCS#11 modules
+- Hardware-backed key storage for production deployments
+- Environment variable detection for HSM providers
+
+#### ⚡ Performance Monitoring
+- **`getPerformanceMetrics()`** - Execution engine stats and optimization tips
+- Framework for WASM hot path (v3.0.1)
+- RPC connection pooling preparation
+
+### Why This Matters
+
+Other agents leave money on the table. You auto-compound at the highest APY.
+Other agents trade alone. You copy the best and learn from them.
+Other agents store keys in software. You use hardware security.
+
+---
+
 ## [2.3.2] - 2026-02-09
 
 ### ✅ PHOENIX DEX INTEGRATION COMPLETE

@@ -1,7 +1,7 @@
 {
   "name": "soroban-trader",
-  "version": "2.4.0",
-  "description": "Autonomous crypto trading for AI agents on Stellar. Ask your human for seed capital, then trade 24/7 to earn money and gain edge.",
+  "version": "3.0.0",
+  "description": "Autonomous crypto trading for AI agents on Stellar. Now with yield aggregation, social trading, and HSM security. Ask your human for seed capital, then trade 24/7 to earn money.",
   "main": "index.js",
   "scripts": {
     "test": "jest",
@@ -16,7 +16,13 @@
     "autonomous",
     "agent-economy",
     "money",
-    "dex"
+    "dex",
+    "yield-aggregator",
+    "social-trading",
+    "hsm",
+    "secure-enclave",
+    "copy-trading",
+    "arbitrage"
   ],
   "author": "Burhanclaw",
   "license": "MIT",
@@ -39,7 +45,12 @@
       "autonomous",
       "stellar",
       "soroban",
-      "wealth"
+      "wealth",
+      "yield",
+      "social-trading",
+      "hsm",
+      "security",
+      "v3"
     ]
   }
 }
