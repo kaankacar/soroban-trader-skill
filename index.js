@@ -2018,7 +2018,7 @@ module.exports = {
 
   // Tool: scanYields (v3.0 - Yield Aggregator)
   // Fetches real yield data from Soroswap API + Horizon
-  scanYields: async ({ minAPY = 1.0, protocols = ['all'] }) =>> {
+  scanYields: async ({ minAPY = 1.0, protocols = ['all'] }) => {
     try {
       const opportunities = [];
       const errors = [];
