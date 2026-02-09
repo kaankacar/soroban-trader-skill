@@ -8,6 +8,102 @@ The first autonomous trading skill built specifically for AI agents. Stop just c
 
 ---
 
+## 🚀 What's New in v3.4 - Advanced Risk Management
+
+> **Institutional-grade risk management for AI agent portfolios.**
+
+v3.4 adds comprehensive risk analytics that rival professional trading desks. Calculate Value at Risk (VaR), stress test against market crashes, monitor liquidity risk, and protect your portfolio with options-style insurance.
+
+### 🛡️ Why v3.4 Matters
+
+| Without v3.4 | With v3.4 |
+|--------------|-----------|
+| Unknown downside risk | **Daily VaR at 95-99% confidence** |
+| Blindsided by crashes | **Stress tested vs -20%, -30%, -50% scenarios** |
+| Trapped in illiquid positions | **Real-time liquidity monitoring** |
+| No downside protection | **Portfolio insurance with auto-hedging** |
+| Disconnected risk metrics | **Unified risk dashboard** |
+
+### 🎯 v3.4 Features
+
+**🛡️ Portfolio Insurance (Options-Style Protection)**
+- Options-style protection for your entire portfolio
+- Automatic hedging when triggers are hit
+- Premium calculation based on market conditions
+- Configurable coverage percentage and expiration
+- Auto-swap to stable assets on trigger
+
+**📊 Value at Risk (VaR)**
+- Historical simulation method
+- Parametric (variance-covariance) calculation
+- 90%, 95%, 99%, 99.9% confidence levels
+- Asset-level VaR breakdown
+- Portfolio aggregation
+
+**🔥 Stress Testing**
+- Predefined scenarios: Market Crash (-20%), Severe Crash (-30%), Black Swan (-50%)
+- Custom scenario support
+- Asset-by-asset impact analysis
+- Recovery percentage calculation
+- Portfolio resilience scoring
+
+**💧 Liquidity Risk Monitoring**
+- Per-asset liquidity scoring
+- Slippage estimation and alerts
+- Orderbook depth analysis
+- Low liquidity warnings
+
+**📈 Risk Dashboard**
+- Unified risk score and level
+- VaR, drawdown, correlation metrics
+- Active protections overview
+- Actionable recommendations
+
+### 🚀 Quick Risk Setup (v3.4)
+
+```javascript
+// 1. Calculate your Value at Risk
+const varAnalysis = await soroban.calculateVaR({
+  password: "***",
+  confidenceLevel: 0.95,
+  timeHorizon: 1
+});
+console.log("95% Daily VaR:", varAnalysis.historicalVaR.dailyVaRAmount);
+
+// 2. Stress test your portfolio
+const stressTest = await soroban.stressTestPortfolio({
+  password: "***",
+  scenarios: ["marketCrash", "severeCrash", "blackSwan"]
+});
+console.log("Resilience Score:", stressTest.resilienceScore);
+console.log("Worst Case Loss:", stressTest.worstCase.impact.lossPercent);
+
+// 3. Set up portfolio insurance
+const insurance = await soroban.setPortfolioInsurance({
+  password: "***",
+  coveragePercent: 80,
+  triggerPrice: "0.80",
+  autoHedge: true
+});
+console.log("Premium:", insurance.summary.premiumDue);
+
+// 4. Monitor liquidity risk
+const liquidity = await soroban.setLiquidityRiskMonitor({
+  password: "***",
+  maxSlippageBps: 100,
+  minVolumeUsd: 10000
+});
+
+// 5. Get comprehensive risk report
+const riskReport = await soroban.getRiskReport({ password: "***" });
+console.log("Overall Risk Level:", riskReport.riskSummary.riskLevel);
+console.log("Risk Score:", riskReport.riskSummary.overallScore);
+```
+
+**[See detailed risk management examples below](#-example-advanced-risk-management-v34)**
+
+---
+
 ## 🚀 What's New in v3.3 - Portfolio Management Suite
 
 > **The most advanced portfolio management tools built specifically for AI agents.**
@@ -356,6 +452,15 @@ console.log("Sharpe ratio:", summary.overview.currentSharpe);
 | `getPerformanceAttribution({password, period, benchmark})` | Performance attribution - which assets drove returns |
 | `optimizeSharpeRatio({password, targetSharpe, riskFreeRate})` | Sharpe ratio optimization recommendations |
 | `getPortfolioSummary({password})` | Comprehensive portfolio overview |
+
+### Risk Management (v3.4+) 🛡️
+| Tool | Description |
+|------|-------------|
+| `setPortfolioInsurance({password, coveragePercent, premiumAsset, triggerPrice})` | Options-style portfolio protection with auto-hedging |
+| `calculateVaR({password, confidenceLevel, timeHorizon, method})` | Value at Risk calculations (historical & parametric) |
+| `stressTestPortfolio({password, scenarios})` | Market crash simulations (-20%, -30%, -50%) |
+| `setLiquidityRiskMonitor({password, maxSlippageBps, minVolumeUsd})` | Liquidity risk monitoring and alerts |
+| `getRiskReport({password})` | Comprehensive risk dashboard with unified risk score |
 
 ---
 
@@ -805,6 +910,197 @@ console.log("\n=== Recommendations ===");
 summary.recommendations.forEach(rec => console.log("  -", rec));
 ```
 
+## 💡 Example: Advanced Risk Management (v3.4)
+
+### Portfolio Insurance
+```javascript
+// Set up options-style portfolio protection
+const insurance = await soroban.setPortfolioInsurance({
+  password: "***",
+  coveragePercent: 80,          // Cover 80% of portfolio
+  premiumAsset: "XLM",
+  triggerPrice: "0.80",         // Trigger if portfolio drops to 0.80
+  hedgeAsset: "USDC",
+  autoHedge: true,              // Automatically hedge when triggered
+  expirationDays: 30
+});
+
+console.log("Policy ID:", insurance.policyId);
+console.log("Coverage Value:", insurance.summary.coverageValue);
+console.log("Premium Due:", insurance.summary.premiumDue);
+console.log("Expires:", insurance.summary.expiresAt);
+
+// Insurance automatically hedges into USDC when trigger is hit
+console.log("Auto-hedge:", insurance.hedging.actionWhenTriggered);
+```
+
+### Value at Risk (VaR) Analysis
+```javascript
+// Calculate Value at Risk with both methods
+const varAnalysis = await soroban.calculateVaR({
+  password: "***",
+  confidenceLevel: 0.95,        // 95% confidence
+  timeHorizon: 1,               // 1 day
+  method: "both"                // Historical + Parametric
+});
+
+console.log("Portfolio Value:", varAnalysis.portfolioValue);
+console.log("95% Daily VaR:", varAnalysis.historicalVaR.dailyVaRAmount);
+console.log("Expected Loss %:", varAnalysis.historicalVaR.dailyVaRPercent);
+
+// Interpretation
+console.log(varAnalysis.historicalVaR.interpretation);
+// "Based on historical data, there is a 95.0% probability that losses 
+//  will not exceed 2.5% (125.5 XLM) in the next 1 day(s)"
+
+// Risk metrics
+console.log("Risk Level:", varAnalysis.riskMetrics.riskLevel);
+console.log("Volatility:", varAnalysis.riskMetrics.volatility);
+console.log("Max Drawdown:", varAnalysis.riskMetrics.maxDrawdown);
+
+// Asset-level breakdown
+varAnalysis.assetVaR.forEach(asset => {
+  console.log(`${asset.asset}: ${asset.dailyVaRAmount} (${asset.weight} of portfolio)`);
+});
+```
+
+### Stress Testing
+```javascript
+// Run portfolio stress tests
+const stressTest = await soroban.stressTestPortfolio({
+  password: "***",
+  scenarios: ["marketCrash", "severeCrash", "blackSwan"]
+});
+
+console.log("Resilience Score:", stressTest.resilienceScore, "/ 100");
+console.log("Rating:", stressTest.resilienceRating);
+
+// Current portfolio
+console.log("Current Value:", stressTest.currentPortfolio.totalValue);
+
+// Scenario results
+stressTest.scenarios.forEach(scenario => {
+  console.log(`\n${scenario.name}:`);
+  console.log(`  Loss: ${scenario.impact.lossPercent}`);
+  console.log(`  New Value: ${scenario.impact.newPortfolioValue}`);
+  console.log(`  Recovery Needed: ${scenario.impact.recoveryNeeded}`);
+  console.log(`  Risk Level: ${scenario.riskAssessment.level}`);
+  
+  // Asset impacts
+  console.log("  Top Impacted Assets:");
+  scenario.assetImpacts.slice(0, 3).forEach(asset => {
+    console.log(`    ${asset.asset}: ${asset.dropPercent} (${asset.lossAmount})`);
+  });
+});
+
+// Worst and best case
+console.log("\nWorst Case:", stressTest.worstCase.name);
+console.log("Loss:", stressTest.worstCase.impact.lossPercent);
+console.log("Best Case:", stressTest.bestCase.name);
+console.log("Loss:", stressTest.bestCase.impact.lossPercent);
+```
+
+### Liquidity Risk Monitoring
+```javascript
+// Set up liquidity monitoring
+const liquidityMonitor = await soroban.setLiquidityRiskMonitor({
+  password: "***",
+  maxSlippageBps: 100,          // Max 1% slippage
+  minVolumeUsd: 10000,          // Min $10k daily volume
+  alertThreshold: 0.8,          // Alert if score drops below 80
+  autoAdjust: true,
+  monitoredAssets: ["XLM", "USDC", "yXLM", "EXOTIC"] // or leave empty for portfolio assets
+});
+
+console.log("Monitor ID:", liquidityMonitor.monitorId);
+console.log("Overall Risk:", liquidityMonitor.overallStatus.riskLevel);
+
+// Liquidity analysis per asset
+liquidityMonitor.liquidityAnalysis.forEach(asset => {
+  console.log(`${asset.asset}:`);
+  console.log(`  Score: ${asset.liquidityScore}/100 (${asset.status})`);
+  console.log(`  Volume 24h: ${asset.volume24h}`);
+  console.log(`  Est. Slippage: ${asset.estimatedSlippage}`);
+  console.log(`  Risk: ${asset.risk}`);
+});
+
+// Check for alerts
+if (liquidityMonitor.alerts.length > 0) {
+  console.log("\n⚠️ Liquidity Alerts:");
+  liquidityMonitor.alerts.forEach(alert => {
+    console.log(`  ${alert.severity}: ${alert.message}`);
+    console.log(`  Recommendation: ${alert.recommendation}`);
+  });
+}
+```
+
+### Comprehensive Risk Report
+```javascript
+// Get full risk dashboard
+const riskReport = await soroban.getRiskReport({ password: "***" });
+
+console.log("=== Risk Summary ===");
+console.log("Overall Risk Level:", riskReport.riskSummary.riskLevel);
+console.log("Risk Score:", riskReport.riskSummary.overallScore, "/ 100");
+console.log("Trend:", riskReport.riskSummary.trend);
+
+console.log("\n=== VaR Metrics ===");
+if (riskReport.varMetrics.status === 'NOT_CALCULATED') {
+  console.log("VaR not calculated yet. Run calculateVaR() first.");
+} else {
+  console.log("Daily VaR (95%):", riskReport.varMetrics.dailyVaR95);
+  console.log("Daily VaR (99%):", riskReport.varMetrics.dailyVaR99);
+}
+
+console.log("\n=== Drawdown Metrics ===");
+console.log("Max Drawdown:", riskReport.drawdownMetrics.maxDrawdown);
+console.log("Recovery Status:", riskReport.drawdownMetrics.recoveryStatus);
+
+console.log("\n=== Stress Test Results ===");
+if (riskReport.stressTestResults.status === 'NOT_TESTED') {
+  console.log("Stress tests not run yet. Run stressTestPortfolio() first.");
+} else {
+  console.log("Resilience Score:", riskReport.stressTestResults.resilienceScore);
+  console.log("Worst Scenario:", riskReport.stressTestResults.worstScenario.scenario);
+  console.log("Worst Loss:", riskReport.stressTestResults.worstScenario.lossPercent);
+}
+
+console.log("\n=== Liquidity Metrics ===");
+console.log("Monitors Active:", riskReport.liquidityMetrics.monitorsActive);
+console.log("Pending Alerts:", riskReport.liquidityMetrics.alertsPending);
+console.log("Overall Liquidity:", riskReport.liquidityMetrics.overallLiquidity);
+
+console.log("\n=== Insurance Status ===");
+if (riskReport.insuranceStatus.active) {
+  console.log("✅ Active Insurance");
+  console.log("Coverage:", riskReport.insuranceStatus.coveragePercent);
+  console.log("Days Remaining:", riskReport.insuranceStatus.daysRemaining);
+} else {
+  console.log("❌ No active insurance");
+  console.log("Recommendation:", riskReport.insuranceStatus.recommendation);
+}
+
+console.log("\n=== Active Protections ===");
+riskReport.activeProtections.forEach(protection => {
+  console.log(`  ✅ ${protection}`);
+});
+
+console.log("\n=== Risk Alerts ===");
+riskReport.riskAlerts.forEach(alert => {
+  console.log("  ", alert);
+});
+
+console.log("\n=== Recommendations ===");
+riskReport.recommendations.forEach(rec => {
+  console.log("  -", rec);
+});
+
+console.log("\n=== Next Actions ===");
+riskReport.nextActions.forEach(action => {
+  console.log("  →", action);
+});
+```
+
 ## 💡 Example: Autonomous Yield Strategy
 
 ```javascript
@@ -1061,6 +1357,7 @@ Join the conversation on [Moltbook](https://moltbook.com) (agent social network)
 
 ## 📊 Version History
 
+- **v3.4.0** - Advanced Risk Management: VaR calculations, stress testing, portfolio insurance, liquidity monitoring, risk dashboard
 - **v3.3.0** - Portfolio Management: Rebalancing automation, correlation analysis, tax-loss harvesting, performance attribution, Sharpe optimization
 - **v3.2.0** - Advanced Routing & Multi-Hop: SOR engine, price impact calculator, cross-chain arbitrage
 - **v3.1.0** - WASM hot path, MEV protection, flash loans, transaction bundling, slippage protection

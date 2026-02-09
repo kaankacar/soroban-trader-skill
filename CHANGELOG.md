@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.0] - 2026-02-09
+
+### 🛡️ V3.4: Advanced Risk Management - COMPLETE
+
+**Institutional-grade risk management for AI agent portfolios.**
+
+### Added
+
+#### Portfolio Insurance (Options-Style Protection)
+- **`setPortfolioInsurance({password, coveragePercent, premiumAsset, triggerPrice})`** - Options-style protection for portfolios
+  - Configure coverage percentage (10-100%)
+  - Set trigger price for automatic hedging
+  - Premium calculation using simplified Black-Scholes model
+  - Auto-hedge into stable assets when triggers hit
+  - Policy expiration and renewal tracking
+  - Coverage value and premium payment tracking
+
+#### Value at Risk (VaR) Calculations
+- **`calculateVaR({password, confidenceLevel, timeHorizon})`** - Value at Risk metrics
+  - Historical simulation method
+  - Parametric (variance-covariance) VaR calculation
+  - Multiple confidence levels (90%, 95%, 99%, 99.9%)
+  - Configurable time horizons
+  - Asset-level VaR breakdown
+  - Portfolio-level risk aggregation
+  - VaR breach tracking
+
+#### Stress Testing
+- **`stressTestPortfolio({password, scenarios})`** - Simulate market crashes
+  - Predefined scenarios: Market Crash (-20%), Severe Crash (-30%), Black Swan (-50%)
+  - Custom scenario support (Crypto Winter, Stablecoin Depeg)
+  - Asset-by-asset impact analysis
+  - Recovery percentage calculation
+  - Portfolio resilience scoring
+  - Risk assessment per scenario
+  - Historical stress test tracking
+
+#### Liquidity Risk Monitoring
+- **`setLiquidityRiskMonitor({password, maxSlippageBps, minVolumeUsd})`** - Monitor position liquidity
+  - Per-asset liquidity scoring
+  - Slippage estimation and monitoring
+  - 24h volume tracking
+  - Orderbook depth analysis
+  - Alert system for low liquidity
+  - Auto-adjust recommendations
+  - Multiple asset monitoring
+
+#### Risk Dashboard
+- **`getRiskReport({password})`** - Comprehensive risk dashboard
+  - Overall risk score and level classification
+  - VaR metrics summary
+  - Drawdown analysis
+  - Stress test results
+  - Liquidity metrics
+  - Insurance status
+  - Correlation metrics
+  - Sharpe ratio tracking
+  - Active protections overview
+  - Risk alerts and recommendations
+  - Next actions guidance
+
+### Changed
+- Enhanced test suite with 20+ test cases for v3.4 features
+- Total test coverage: 134+ test cases
+- Improved risk calculation accuracy
+
+---
+
 ## [3.3.0] - 2026-02-09
 
 ### 📊 V3.3: Portfolio Management - COMPLETE

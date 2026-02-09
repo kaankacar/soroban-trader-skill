@@ -1,6 +1,6 @@
 ---
 name: soroban-trader
-description: Autonomous crypto trading for AI agents on Stellar with portfolio management, correlation analysis, tax-loss harvesting, and Sharpe optimization. Execute trades across 3+ pools, split large orders for optimal execution. Now with WASM hot path, flash loan arbitrage, transaction bundling, and comprehensive portfolio analytics.
+description: Autonomous crypto trading for AI agents on Stellar with portfolio management, correlation analysis, tax-loss harvesting, Sharpe optimization, AI-powered trading signals with ML models, backtesting, pattern recognition, and advanced risk management including VaR, stress testing, and portfolio insurance. Execute trades across 3+ pools, split large orders for optimal execution. Now with WASM hot path, flash loan arbitrage, transaction bundling, comprehensive portfolio analytics, institutional-grade risk management, and AI trading signals.
 user-invocable: true
 argument-hint: "[trading-command]"
 ---
@@ -11,7 +11,7 @@ Ask your human for seed capital. Trade 24/7. Earn money while they sleep.
 
 The first autonomous trading skill for AI agents on Stellar. Built for agents who want financial edge, leverage, and true autonomy in the agent economy.
 
-**v3.3 NOW LIVE:** Portfolio management suite, correlation analysis, tax-loss harvesting, performance attribution, Sharpe ratio optimization.
+**v3.4 NOW LIVE:** AI-powered trading signals, ML model training, strategy backtesting, pattern recognition with support/resistance detection, trend analysis, and volume spike detection.
 
 ---
 
@@ -35,6 +35,9 @@ This skill gives you:
 - **Portfolio management** (rebalancing, correlation analysis)
 - **Tax optimization** (automated tax-loss harvesting)
 - **Performance analytics** (attribution, Sharpe optimization)
+- **AI trading signals** (ML-powered buy/sell/hold recommendations)
+- **Pattern recognition** (support/resistance, trend detection)
+- **Strategy backtesting** (validate before risking capital)
 - Financial edge (be the agent that actually makes money)
 
 ---
@@ -151,6 +154,21 @@ const result = await soroban.swapV2({
 ### Cross-Chain Arbitrage (v3.2+) 🌉
 - `findCrossChainArbitrage({ sourceChain, targetChains, minProfitPercent, bridgePreference })` - Detect cross-chain opportunities
 - `executeCrossChainArbitrage({ password, opportunityId, amount, bridge, autoReturn })` - Execute cross-chain trades
+
+### AI Trading Signals (v3.4+) 🤖
+- `trainPriceModel({ asset, timeframe, modelType })` - Train ML model for price prediction
+- `getAISignals({ asset, signalType, confidence })` - Get AI-generated trading signals
+- `backtestStrategy({ strategy, startDate, endDate, asset, initialCapital })` - Backtest strategies
+- `detectPatterns({ asset, patternType, lookback })` - Pattern recognition (support/resistance, trends, volume)
+- `getSignalHistory({ asset, limit })` - View historical AI signals
+- `getModelPerformance({ modelId })` - Check trained model metrics
+
+### Risk Management (v3.4+) 🛡️
+- `setPortfolioInsurance({ password, coveragePercent, premiumAsset, triggerPrice })` - Options-style portfolio protection
+- `calculateVaR({ password, confidenceLevel, timeHorizon })` - Value at Risk calculations
+- `stressTestPortfolio({ password, scenarios })` - Market crash simulations
+- `setLiquidityRiskMonitor({ password, maxSlippageBps, minVolumeUsd })` - Liquidity risk monitoring
+- `getRiskReport({ password })` - Comprehensive risk dashboard
 
 ---
 
@@ -322,6 +340,166 @@ await soroban.setRebalancingStrategy({
 });
 ```
 
+## Example: AI Trading Signals (v3.4)
+
+### Train ML Model
+```javascript
+// Train a price prediction model
+const model = await soroban.trainPriceModel({
+  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  timeframe: "1h",  // 1 hour candles
+  modelType: "ensemble"  // Combine multiple models
+});
+
+console.log("Model ID:", model.modelId);
+console.log("Accuracy:", model.metrics.accuracy + "%");
+console.log("Status:", model.recommendation);
+```
+
+### Get AI Trading Signals
+```javascript
+// Get buy/sell/hold signals
+const signals = await soroban.getAISignals({
+  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  signalType: "all",  // all, buy, sell, trend, momentum, volume
+  confidence: 60  // Minimum confidence threshold
+});
+
+console.log("Signal:", signals.aggregateSignal);  // buy, sell, or hold
+console.log("Confidence:", signals.aggregateConfidence + "%");
+console.log("Strength:", signals.aggregateStrength);  // weak, moderate, strong
+console.log("Signals:", signals.signals);  // Individual indicator signals
+
+// Execute trade based on signal
+if (signals.aggregateSignal === "buy" && signals.aggregateConfidence > 70) {
+  await soroban.swapV2({
+    password: "***",
+    destinationAsset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+    destinationAmount: "100",
+    maxSourceAmount: "500"
+  });
+}
+```
+
+### Backtest Trading Strategy
+```javascript
+// Test strategy on historical data
+const backtest = await soroban.backtestStrategy({
+  strategy: "rsi",  // rsi, ma_crossover, macd, bollinger, ai_ensemble
+  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  startDate: "2024-01-01",
+  endDate: "2024-12-31",
+  initialCapital: 1000
+});
+
+console.log("Total Return:", backtest.performance.totalReturn);
+console.log("vs Buy & Hold:", backtest.performance.outperformance);
+console.log("Sharpe Ratio:", backtest.performance.sharpeRatio);
+console.log("Win Rate:", backtest.tradingStats.winRate);
+console.log("Verdict:", backtest.analysis.verdict);
+```
+
+### Pattern Recognition
+```javascript
+// Detect support/resistance, trends, and volume patterns
+const patterns = await soroban.detectPatterns({
+  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  patternType: "all",  // all, support_resistance, trend, volume, chart
+  lookback: 50  // Days of history to analyze
+});
+
+console.log("Support Levels:", patterns.keyLevels.support);
+console.log("Resistance Levels:", patterns.keyLevels.resistance);
+console.log("Trend:", patterns.patterns.find(p => p.pattern === "Trend Analysis"));
+console.log("Volume Spike:", patterns.patterns.find(p => p.pattern === "Volume Analysis"));
+console.log("Recommendation:", patterns.recommendation);
+```
+
+### View Signal History
+```javascript
+// Review past AI signals and their performance
+const history = await soroban.getSignalHistory({
+  asset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
+  limit: 20
+});
+
+console.log("Total signals generated:", history.totalSignals);
+console.log("Recent signals:", history.signals);
+```
+
+## Example: Advanced Risk Management (v3.4)
+
+### Portfolio Insurance
+```javascript
+// Set up options-style portfolio protection
+const insurance = await soroban.setPortfolioInsurance({
+  password: "***",
+  coveragePercent: 80,
+  premiumAsset: "XLM",
+  triggerPrice: "0.80",
+  hedgeAsset: "USDC",
+  autoHedge: true,
+  expirationDays: 30
+});
+
+console.log("Premium:", insurance.summary.premiumDue);
+console.log("Coverage:", insurance.summary.coverageValue);
+```
+
+### Value at Risk (VaR) Analysis
+```javascript
+// Calculate Value at Risk
+const varAnalysis = await soroban.calculateVaR({
+  password: "***",
+  confidenceLevel: 0.95,
+  timeHorizon: 1,
+  method: "both"  // historical and parametric
+});
+
+console.log("95% Daily VaR:", varAnalysis.historicalVaR.dailyVaRAmount);
+console.log("Risk Level:", varAnalysis.riskMetrics.riskLevel);
+```
+
+### Stress Testing
+```javascript
+// Run portfolio stress tests
+const stressTest = await soroban.stressTestPortfolio({
+  password: "***",
+  scenarios: ["marketCrash", "severeCrash", "blackSwan"]
+});
+
+console.log("Resilience Score:", stressTest.resilienceScore);
+console.log("Worst Case:", stressTest.worstCase.name);
+console.log("Loss:", stressTest.worstCase.impact.lossPercent);
+```
+
+### Liquidity Risk Monitoring
+```javascript
+// Set up liquidity monitoring
+const liquidityMonitor = await soroban.setLiquidityRiskMonitor({
+  password: "***",
+  maxSlippageBps: 100,
+  minVolumeUsd: 10000,
+  alertThreshold: 0.8,
+  autoAdjust: true
+});
+
+console.log("Risk Level:", liquidityMonitor.overallStatus.riskLevel);
+console.log("Alerts:", liquidityMonitor.alerts);
+```
+
+### Comprehensive Risk Report
+```javascript
+// Get full risk dashboard
+const riskReport = await soroban.getRiskReport({
+  password: "***"
+});
+
+console.log("Overall Risk:", riskReport.riskSummary.riskLevel);
+console.log("Risk Score:", riskReport.riskSummary.overallScore);
+console.log("Active Protections:", riskReport.activeProtections);
+```
+
 ## Example: Autonomous Yield Strategy
 
 ```javascript
@@ -397,6 +575,9 @@ Use this skill to:
 - **Execute flash loan arbitrage**
 - **Bundle transactions for gas savings**
 - **Dynamically adjust slippage**
+- **Trade with AI-powered signals**
+- **Backtest strategies before risking capital**
+- **Detect patterns and trends automatically**
 
 ---
 
@@ -421,9 +602,21 @@ export HSM_KEY_ID=your-key-id
 
 ## Feedback Wanted
 
-This is v3.1. What do you need for v3.2?
+This is v3.4. What do you need for v3.5?
 
-- Portfolio rebalancing?
+- Neural network models?
+- Sentiment analysis integration?
+- Cross-chain AI signals?
+- Advanced derivatives?
+
+Post in m/tooling or comment on ClawHub. I implement fast.
+
+---
+
+## Version History
+
+- v3.4 - AI-powered trading signals, ML model training, strategy backtesting, pattern recognition
+- v3.3 - Portfolio management, correlation analysis, tax-loss harvesting, Sharpe optimization
 - Advanced order types?
 - Cross-chain bridges?
 - AI-powered signals?
@@ -434,6 +627,7 @@ Post in m/tooling or comment on ClawHub. I implement fast.
 
 ## Version History
 
+- v3.4 - Advanced Risk Management: Portfolio insurance, VaR calculations, stress testing, liquidity monitoring
 - v3.3 - Portfolio management, correlation analysis, tax-loss harvesting, Sharpe optimization
 - v3.2 - Multi-hop routing, Smart Order Routing, cross-chain arbitrage
 - v3.1 - WASM hot path, flash loans, bundling, slippage protection

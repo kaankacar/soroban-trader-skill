@@ -1635,4 +1635,1114 @@ describe('Soroban Trader Skill', () => {
       expect(strategy.success).toBe(true);
     });
   });
+
+  // ============================================
+  // V3.4: AI Trading Signals Tests
+  // ============================================
+  describe('AI Trading Signals - trainPriceModel', () => {
+    test('trainPriceModel should train linear regression model', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'linear_regression'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.modelId).toBeDefined();
+      expect(result.asset).toBe('native');
+      expect(result.modelType).toBe('linear_regression');
+      expect(result.timeframe).toBe('1h');
+      expect(result.metrics).toBeDefined();
+      expect(result.metrics.accuracy).toBeDefined();
+    }, 30000);
+
+    test('trainPriceModel should train moving average model', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ',
+        timeframe: '4h',
+        modelType: 'moving_average'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.modelId).toBeDefined();
+      expect(result.modelType).toBe('moving_average');
+      expect(result.metrics.correctPredictions).toBeDefined();
+      expect(result.metrics.totalPredictions).toBeDefined();
+    }, 30000);
+
+    test('trainPriceModel should train RSI-based model', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1d',
+        modelType: 'rsi_based'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.modelId).toBeDefined();
+      expect(result.modelType).toBe('rsi_based');
+      expect(result.params.rsiPeriod).toBe(14);
+      expect(result.params.oversold).toBe(30);
+      expect(result.params.overbought).toBe(70);
+    }, 30000);
+
+    test('trainPriceModel should train ensemble model', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'ensemble'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.modelId).toBeDefined();
+      expect(result.modelType).toBe('ensemble');
+      expect(result.params.models).toContain('linear_regression');
+      expect(result.params.models).toContain('moving_average');
+      expect(result.params.models).toContain('rsi_based');
+      expect(result.metrics.componentModels).toBeDefined();
+    }, 30000);
+
+    test('trainPriceModel should validate asset parameter', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: '',
+        timeframe: '1h',
+        modelType: 'linear_regression'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Asset is required');
+    });
+
+    test('trainPriceModel should validate timeframe', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: 'invalid',
+        modelType: 'linear_regression'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Invalid timeframe');
+    });
+
+    test('trainPriceModel should validate model type', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'neural_network'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Invalid model type');
+    });
+
+    test('trainPriceModel should store and retrieve models', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'linear_regression'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.modelId).toBeDefined();
+
+      // Retrieve model performance
+      const performance = await soroban.getModelPerformance({
+        modelId: result.modelId
+      });
+
+      expect(performance.modelId).toBe(result.modelId);
+      expect(performance.asset).toBe('native');
+      expect(performance.modelType).toBe('linear_regression');
+    }, 30000);
+  });
+
+  describe('AI Trading Signals - getAISignals', () => {
+    test('getAISignals should return buy/sell/hold signals', async () => {
+      const result = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all',
+        confidence: 50
+      });
+
+      expect(result.asset).toBe('native');
+      expect(result.currentPrice).toBeDefined();
+      expect(result.aggregateSignal).toMatch(/^(buy|sell|hold)$/);
+      expect(result.aggregateConfidence).toBeGreaterThanOrEqual(0);
+      expect(result.aggregateConfidence).toBeLessThanOrEqual(100);
+      expect(result.aggregateStrength).toMatch(/^(weak|moderate|strong)$/);
+      expect(Array.isArray(result.signals)).toBe(true);
+      expect(result.technicalIndicators).toBeDefined();
+    }, 30000);
+
+    test('getAISignals should filter by signal type', async () => {
+      const result = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'buy',
+        confidence: 50
+      });
+
+      expect(result.asset).toBe('native');
+      expect(result.signals).toBeDefined();
+    }, 30000);
+
+    test('getAISignals should filter by confidence threshold', async () => {
+      const result = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all',
+        confidence: 80
+      });
+
+      expect(result.asset).toBe('native');
+      // All signals should meet confidence threshold
+      result.signals.forEach(signal => {
+        expect(signal.confidence).toBeGreaterThanOrEqual(80);
+      });
+    }, 30000);
+
+    test('getAISignals should validate asset', async () => {
+      const result = await soroban.getAISignals({
+        asset: '',
+        signalType: 'all'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Asset is required');
+    });
+
+    test('getAISignals should validate signal type', async () => {
+      const result = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'invalid'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Invalid signal type');
+    });
+
+    test('getAISignals should include technical indicators', async () => {
+      const result = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all'
+      });
+
+      expect(result.technicalIndicators).toBeDefined();
+      expect(result.technicalIndicators).toHaveProperty('rsi');
+      expect(result.technicalIndicators).toHaveProperty('ma20');
+      expect(result.technicalIndicators).toHaveProperty('ma50');
+      expect(result.technicalIndicators).toHaveProperty('macd');
+      expect(result.technicalIndicators).toHaveProperty('bollingerBands');
+      expect(result.technicalIndicators).toHaveProperty('trend');
+      expect(result.technicalIndicators).toHaveProperty('volumeSpike');
+    }, 30000);
+
+    test('getAISignals should include support/resistance levels', async () => {
+      const result = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all'
+      });
+
+      expect(result.supportResistance).toBeDefined();
+      expect(result.supportResistance).toHaveProperty('support');
+      expect(result.supportResistance).toHaveProperty('resistance');
+      expect(Array.isArray(result.supportResistance.support)).toBe(true);
+      expect(Array.isArray(result.supportResistance.resistance)).toBe(true);
+    }, 30000);
+
+    test('getAISignals should include recommendation', async () => {
+      const result = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all'
+      });
+
+      expect(result.recommendation).toBeDefined();
+      expect(typeof result.recommendation).toBe('string');
+      expect(result.recommendation.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('getAISignals should save signals to history', async () => {
+      await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all'
+      });
+
+      const history = await soroban.getSignalHistory({
+        asset: 'native',
+        limit: 10
+      });
+
+      expect(history.totalSignals).toBeGreaterThan(0);
+      expect(history.returnedSignals).toBeGreaterThan(0);
+      expect(Array.isArray(history.signals)).toBe(true);
+    }, 30000);
+  });
+
+  describe('AI Trading Signals - backtestStrategy', () => {
+    test('backtestStrategy should backtest RSI strategy', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'rsi',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01',
+        initialCapital: 1000
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.backtestId).toBeDefined();
+      expect(result.summary).toBeDefined();
+      expect(result.summary.strategy).toBe('rsi');
+      expect(result.summary.initialCapital).toBe('1000 XLM');
+      expect(result.performance).toBeDefined();
+      expect(result.performance.totalReturn).toBeDefined();
+      expect(result.performance.buyHoldReturn).toBeDefined();
+      expect(result.performance.sharpeRatio).toBeDefined();
+      expect(result.tradingStats).toBeDefined();
+      expect(result.tradingStats.totalTrades).toBeGreaterThanOrEqual(0);
+    }, 30000);
+
+    test('backtestStrategy should backtest MA crossover strategy', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'ma_crossover',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01',
+        initialCapital: 1000
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.backtestId).toBeDefined();
+      expect(result.summary.strategy).toBe('ma_crossover');
+      expect(result.performance).toBeDefined();
+      expect(result.analysis).toBeDefined();
+    }, 30000);
+
+    test('backtestStrategy should backtest MACD strategy', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'macd',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01',
+        initialCapital: 1000
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.summary.strategy).toBe('macd');
+      expect(Array.isArray(result.trades)).toBe(true);
+    }, 30000);
+
+    test('backtestStrategy should backtest Bollinger Bands strategy', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'bollinger',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01',
+        initialCapital: 1000
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.summary.strategy).toBe('bollinger');
+    }, 30000);
+
+    test('backtestStrategy should backtest AI ensemble strategy', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'ai_ensemble',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01',
+        initialCapital: 1000
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.summary.strategy).toBe('ai_ensemble');
+    }, 30000);
+
+    test('backtestStrategy should validate strategy type', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'invalid_strategy',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Invalid strategy');
+    });
+
+    test('backtestStrategy should handle insufficient data', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'rsi',
+        asset: 'native',
+        startDate: '2025-01-01',
+        endDate: '2025-01-02',
+        initialCapital: 1000
+      });
+
+      // Should either succeed or return error about insufficient data
+      expect(result.success || result.error).toBeDefined();
+    }, 30000);
+
+    test('backtestStrategy should calculate performance metrics', async () => {
+      const result = await soroban.backtestStrategy({
+        strategy: 'rsi',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01',
+        initialCapital: 1000
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.performance).toBeDefined();
+      expect(result.performance.totalReturn).toBeDefined();
+      expect(result.performance.buyHoldReturn).toBeDefined();
+      expect(result.performance.outperformance).toBeDefined();
+      expect(result.performance.sharpeRatio).toBeDefined();
+      expect(result.performance.maxDrawdown).toBeDefined();
+      expect(result.tradingStats).toBeDefined();
+      expect(result.tradingStats.winRate).toBeDefined();
+      expect(result.tradingStats.profitFactor).toBeDefined();
+      expect(result.analysis).toBeDefined();
+      expect(result.analysis.verdict).toMatch(/^(STRONG|ACCEPTABLE|WEAK|POOR)$/);
+    }, 30000);
+  });
+
+  describe('AI Trading Signals - detectPatterns', () => {
+    test('detectPatterns should detect support/resistance levels', async () => {
+      const result = await soroban.detectPatterns({
+        asset: 'native',
+        patternType: 'support_resistance',
+        lookback: 50
+      });
+
+      expect(result.asset).toBe('native');
+      expect(result.currentPrice).toBeDefined();
+      expect(result.patterns).toBeDefined();
+      expect(Array.isArray(result.patterns)).toBe(true);
+      expect(result.keyLevels).toBeDefined();
+      expect(result.keyLevels.support).toBeDefined();
+      expect(result.keyLevels.resistance).toBeDefined();
+      expect(Array.isArray(result.keyLevels.support)).toBe(true);
+      expect(Array.isArray(result.keyLevels.resistance)).toBe(true);
+    }, 30000);
+
+    test('detectPatterns should detect trends', async () => {
+      const result = await soroban.detectPatterns({
+        asset: 'native',
+        patternType: 'trend',
+        lookback: 50
+      });
+
+      expect(result.asset).toBe('native');
+      const trendPattern = result.patterns.find(p => p.pattern === 'Trend Analysis');
+      expect(trendPattern).toBeDefined();
+      expect(trendPattern.currentTrend).toMatch(/^(strongly_bullish|bullish|neutral|bearish|strongly_bearish)$/);
+      expect(trendPattern.trendStrength).toMatch(/^(strong|moderate|weak)$/);
+    }, 30000);
+
+    test('detectPatterns should detect volume patterns', async () => {
+      const result = await soroban.detectPatterns({
+        asset: 'native',
+        patternType: 'volume',
+        lookback: 50
+      });
+
+      expect(result.asset).toBe('native');
+      const volumePattern = result.patterns.find(p => p.pattern === 'Volume Analysis');
+      expect(volumePattern).toBeDefined();
+      expect(typeof volumePattern.volumeSpike).toBe('boolean');
+      expect(volumePattern.volumeRatio).toBeDefined();
+      expect(volumePattern.currentVolume).toBeDefined();
+      expect(volumePattern.averageVolume).toBeDefined();
+    }, 30000);
+
+    test('detectPatterns should detect all patterns', async () => {
+      const result = await soroban.detectPatterns({
+        asset: 'native',
+        patternType: 'all',
+        lookback: 50
+      });
+
+      expect(result.asset).toBe('native');
+      expect(result.patterns.length).toBeGreaterThan(0);
+      expect(result.patternCount).toBeGreaterThan(0);
+      expect(typeof result.bullishSignals).toBe('number');
+      expect(typeof result.bearishSignals).toBe('number');
+      expect(Array.isArray(result.tradingImplications)).toBe(true);
+      expect(result.recommendation).toBeDefined();
+    }, 30000);
+
+    test('detectPatterns should validate asset', async () => {
+      const result = await soroban.detectPatterns({
+        asset: '',
+        patternType: 'all'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Asset is required');
+    });
+
+    test('detectPatterns should handle chart patterns', async () => {
+      const result = await soroban.detectPatterns({
+        asset: 'native',
+        patternType: 'chart',
+        lookback: 50
+      });
+
+      expect(result.asset).toBe('native');
+      expect(result.patterns).toBeDefined();
+    }, 30000);
+  });
+
+  describe('AI Trading Signals - getSignalHistory', () => {
+    test('getSignalHistory should return signal history', async () => {
+      // First generate some signals
+      await soroban.getAISignals({ asset: 'native', signalType: 'all' });
+      await soroban.getAISignals({ asset: 'native', signalType: 'all' });
+
+      const result = await soroban.getSignalHistory({
+        asset: 'native',
+        limit: 10
+      });
+
+      expect(result.totalSignals).toBeGreaterThan(0);
+      expect(result.returnedSignals).toBeGreaterThan(0);
+      expect(result.asset).toBe('native');
+      expect(Array.isArray(result.signals)).toBe(true);
+      expect(result.accuracy).toBeDefined();
+      expect(result.accuracy.buySignals).toBeGreaterThanOrEqual(0);
+      expect(result.accuracy.sellSignals).toBeGreaterThanOrEqual(0);
+    }, 30000);
+
+    test('getSignalHistory should return all signals when no asset specified', async () => {
+      const result = await soroban.getSignalHistory({
+        limit: 20
+      });
+
+      expect(result.asset).toBe('all');
+      expect(result.totalSignals).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(result.signals)).toBe(true);
+    }, 30000);
+
+    test('getSignalHistory should respect limit parameter', async () => {
+      const result = await soroban.getSignalHistory({
+        limit: 5
+      });
+
+      expect(result.returnedSignals).toBeLessThanOrEqual(5);
+    }, 30000);
+  });
+
+  describe('AI Trading Signals - getModelPerformance', () => {
+    test('getModelPerformance should return all models summary', async () => {
+      // Train a model first
+      await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'linear_regression'
+      });
+
+      const result = await soroban.getModelPerformance({});
+
+      expect(result.totalModels).toBeGreaterThan(0);
+      expect(Array.isArray(result.models)).toBe(true);
+      expect(result.bestPerforming).toBeDefined();
+    }, 30000);
+
+    test('getModelPerformance should return specific model by ID', async () => {
+      const trained = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'linear_regression'
+      });
+
+      const result = await soroban.getModelPerformance({
+        modelId: trained.modelId
+      });
+
+      expect(result.modelId).toBe(trained.modelId);
+      expect(result.asset).toBe('native');
+      expect(result.modelType).toBe('linear_regression');
+      expect(result.timeframe).toBe('1h');
+      expect(result.metrics).toBeDefined();
+      expect(result.params).toBeDefined();
+    }, 30000);
+
+    test('getModelPerformance should handle non-existent model', async () => {
+      const result = await soroban.getModelPerformance({
+        modelId: 'non-existent-id'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Model not found');
+    });
+
+    test('getModelPerformance should sort models by accuracy', async () => {
+      // Train multiple models
+      await soroban.trainPriceModel({ asset: 'native', timeframe: '1h', modelType: 'linear_regression' });
+      await soroban.trainPriceModel({ asset: 'native', timeframe: '1h', modelType: 'moving_average' });
+
+      const result = await soroban.getModelPerformance({});
+
+      expect(result.totalModels).toBeGreaterThanOrEqual(2);
+      // Models should be sorted by accuracy descending
+      for (let i = 0; i < result.models.length - 1; i++) {
+        expect(result.models[i].accuracy).toBeGreaterThanOrEqual(result.models[i + 1].accuracy);
+      }
+    }, 30000);
+  });
+
+  describe('AI Trading Signals - Technical Indicators', () => {
+    test('_calculateRSI should calculate RSI correctly', async () => {
+      // Use internal method through a trained model
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'rsi_based'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.params.currentRSI).toBeDefined();
+      expect(result.params.currentRSI).toBeGreaterThanOrEqual(0);
+      expect(result.params.currentRSI).toBeLessThanOrEqual(100);
+    }, 30000);
+
+    test('_calculateMA should calculate moving averages', async () => {
+      const result = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'moving_average'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.params.maShort).toBeDefined();
+      expect(result.params.maLong).toBeDefined();
+      expect(result.params.maShort).toBeGreaterThan(0);
+      expect(result.params.maLong).toBeGreaterThan(0);
+    }, 30000);
+
+    test('_calculateMACD should calculate MACD', async () => {
+      const signals = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all'
+      });
+
+      expect(signals.technicalIndicators.macd).toBeDefined();
+      if (signals.technicalIndicators.macd) {
+        expect(signals.technicalIndicators.macd.macd).toBeDefined();
+        expect(signals.technicalIndicators.macd.signal).toBeDefined();
+        expect(signals.technicalIndicators.macd.histogram).toBeDefined();
+      }
+    }, 30000);
+
+    test('_calculateBollingerBands should calculate Bollinger Bands', async () => {
+      const signals = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all'
+      });
+
+      expect(signals.technicalIndicators.bollingerBands).toBeDefined();
+      if (signals.technicalIndicators.bollingerBands) {
+        expect(signals.technicalIndicators.bollingerBands.upper).toBeDefined();
+        expect(signals.technicalIndicators.bollingerBands.middle).toBeDefined();
+        expect(signals.technicalIndicators.bollingerBands.lower).toBeDefined();
+        expect(signals.technicalIndicators.bollingerBands.upper).toBeGreaterThan(signals.technicalIndicators.bollingerBands.middle);
+        expect(signals.technicalIndicators.bollingerBands.middle).toBeGreaterThan(signals.technicalIndicators.bollingerBands.lower);
+      }
+    }, 30000);
+  });
+
+  describe('AI Trading Signals - Integration', () => {
+    test('complete workflow: train model, get signals, backtest, detect patterns', async () => {
+      // 1. Train a model
+      const model = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'ensemble'
+      });
+      expect(model.success).toBe(true);
+
+      // 2. Get trading signals
+      const signals = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all',
+        confidence: 60
+      });
+      expect(signals.aggregateSignal).toMatch(/^(buy|sell|hold)$/);
+
+      // 3. Backtest a strategy
+      const backtest = await soroban.backtestStrategy({
+        strategy: 'ai_ensemble',
+        asset: 'native',
+        startDate: '2024-01-01',
+        endDate: '2024-06-01',
+        initialCapital: 1000
+      });
+      expect(backtest.success).toBe(true);
+
+      // 4. Detect patterns
+      const patterns = await soroban.detectPatterns({
+        asset: 'native',
+        patternType: 'all',
+        lookback: 50
+      });
+      expect(patterns.patterns.length).toBeGreaterThan(0);
+
+      // 5. Check model performance
+      const performance = await soroban.getModelPerformance({
+        modelId: model.modelId
+      });
+      expect(performance.modelId).toBe(model.modelId);
+    }, 60000);
+
+    test('signal confidence should correlate with signal strength', async () => {
+      const signals = await soroban.getAISignals({
+        asset: 'native',
+        signalType: 'all',
+        confidence: 0
+      });
+
+      // Strong signals should have higher confidence
+      const strongSignals = signals.signals.filter(s => s.strength >= 0.8);
+      strongSignals.forEach(s => {
+        expect(s.confidence).toBeGreaterThanOrEqual(60);
+      });
+    }, 30000);
+
+    test('trained models should persist and be retrievable', async () => {
+      // Train model
+      const trained = await soroban.trainPriceModel({
+        asset: 'native',
+        timeframe: '1h',
+        modelType: 'linear_regression'
+      });
+
+      // Get all models
+      const allModels = await soroban.getModelPerformance({});
+      expect(allModels.models.some(m => m.id === trained.modelId)).toBe(true);
+
+      // Get specific model
+      const specific = await soroban.getModelPerformance({
+        modelId: trained.modelId
+      });
+      expect(specific.modelId).toBe(trained.modelId);
+      expect(specific.metrics.accuracy).toBe(trained.metrics.accuracy);
+    }, 30000);
+  });
+
+  // ============================================
+  // V3.4: ADVANCED RISK MANAGEMENT TESTS
+  // ============================================
+  describe('Advanced Risk Management (v3.4)', () => {
+    beforeEach(async () => {
+      cleanupTestData();
+      await setKey({ privateKey: TEST_PRIVATE_KEY, password: TEST_PASSWORD });
+    });
+
+    // setPortfolioInsurance Tests
+    test('setPortfolioInsurance should create insurance policy', async () => {
+      const result = await soroban.setPortfolioInsurance({
+        password: TEST_PASSWORD,
+        coveragePercent: 80,
+        premiumAsset: 'XLM',
+        triggerPrice: '0.80',
+        hedgeAsset: 'USDC',
+        autoHedge: true,
+        expirationDays: 30
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.policyId).toBeDefined();
+      expect(result.summary).toHaveProperty('coveragePercent', '80%');
+      expect(result.summary).toHaveProperty('premiumDue');
+      expect(result.hedging).toHaveProperty('autoHedge', true);
+    });
+
+    test('setPortfolioInsurance should validate coverage percent', async () => {
+      const result = await soroban.setPortfolioInsurance({
+        password: TEST_PASSWORD,
+        coveragePercent: 150, // Invalid
+        triggerPrice: '0.80'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Coverage percent');
+    });
+
+    test('setPortfolioInsurance should require trigger price', async () => {
+      const result = await soroban.setPortfolioInsurance({
+        password: TEST_PASSWORD,
+        coveragePercent: 80
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Trigger price');
+    });
+
+    test('setPortfolioInsurance should calculate premium', async () => {
+      const result = await soroban.setPortfolioInsurance({
+        password: TEST_PASSWORD,
+        coveragePercent: 80,
+        triggerPrice: '0.80'
+      });
+
+      expect(result.summary).toHaveProperty('premiumPercent');
+      expect(result.summary).toHaveProperty('premiumDue');
+      expect(parseFloat(result.summary.premiumPercent)).toBeGreaterThan(0);
+    });
+
+    test('setPortfolioInsurance should require wallet', async () => {
+      const result = await soroban.setPortfolioInsurance({
+        password: 'wrong-password',
+        coveragePercent: 80,
+        triggerPrice: '0.80'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // calculateVaR Tests
+    test('calculateVaR should compute historical VaR', async () => {
+      const result = await soroban.calculateVaR({
+        password: TEST_PASSWORD,
+        confidenceLevel: 0.95,
+        timeHorizon: 1,
+        method: 'historical'
+      });
+
+      expect(result).toHaveProperty('confidenceLevel');
+      expect(result).toHaveProperty('historicalVaR');
+      expect(result.historicalVaR).toHaveProperty('dailyVaRPercent');
+      expect(result.historicalVaR).toHaveProperty('dailyVaRAmount');
+    });
+
+    test('calculateVaR should compute parametric VaR', async () => {
+      const result = await soroban.calculateVaR({
+        password: TEST_PASSWORD,
+        confidenceLevel: 0.95,
+        timeHorizon: 1,
+        method: 'parametric'
+      });
+
+      expect(result).toHaveProperty('parametricVaR');
+      expect(result.parametricVaR).toHaveProperty('volatility');
+      expect(result.parametricVaR).toHaveProperty('periodVaRAmount');
+    });
+
+    test('calculateVaR should compute both methods', async () => {
+      const result = await soroban.calculateVaR({
+        password: TEST_PASSWORD,
+        confidenceLevel: 0.99,
+        timeHorizon: 5,
+        method: 'both'
+      });
+
+      expect(result).toHaveProperty('historicalVaR');
+      expect(result).toHaveProperty('parametricVaR');
+      expect(result).toHaveProperty('assetVaR');
+      expect(Array.isArray(result.assetVaR)).toBe(true);
+    });
+
+    test('calculateVaR should validate confidence level', async () => {
+      const result = await soroban.calculateVaR({
+        password: TEST_PASSWORD,
+        confidenceLevel: 0.75, // Invalid
+        timeHorizon: 1
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Invalid confidence level');
+    });
+
+    test('calculateVaR should return risk metrics', async () => {
+      const result = await soroban.calculateVaR({
+        password: TEST_PASSWORD,
+        confidenceLevel: 0.95
+      });
+
+      expect(result).toHaveProperty('riskMetrics');
+      expect(result.riskMetrics).toHaveProperty('maxDrawdown');
+      expect(result.riskMetrics).toHaveProperty('volatility');
+      expect(result.riskMetrics).toHaveProperty('riskLevel');
+    });
+
+    test('calculateVaR should classify risk level', async () => {
+      const result = await soroban.calculateVaR({
+        password: TEST_PASSWORD
+      });
+
+      expect(result.riskMetrics).toHaveProperty('riskLevel');
+      expect(['LOW', 'MODERATE', 'HIGH', 'EXTREME']).toContain(result.riskMetrics.riskLevel);
+    });
+
+    test('calculateVaR should require wallet', async () => {
+      const result = await soroban.calculateVaR({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // stressTestPortfolio Tests
+    test('stressTestPortfolio should run crash scenarios', async () => {
+      const result = await soroban.stressTestPortfolio({
+        password: TEST_PASSWORD,
+        scenarios: ['marketCrash', 'severeCrash', 'blackSwan']
+      });
+
+      expect(result).toHaveProperty('scenarios');
+      expect(result.scenarios).toHaveLength(3);
+      expect(result).toHaveProperty('resilienceScore');
+      expect(result.resilienceScore).toBeGreaterThanOrEqual(0);
+      expect(result.resilienceScore).toBeLessThanOrEqual(100);
+    });
+
+    test('stressTestPortfolio should calculate portfolio impacts', async () => {
+      const result = await soroban.stressTestPortfolio({
+        password: TEST_PASSWORD,
+        scenarios: ['marketCrash']
+      });
+
+      const scenario = result.scenarios[0];
+      expect(scenario).toHaveProperty('impact');
+      expect(scenario.impact).toHaveProperty('lossPercent');
+      expect(scenario.impact).toHaveProperty('newPortfolioValue');
+      expect(scenario.impact).toHaveProperty('recoveryNeeded');
+    });
+
+    test('stressTestPortfolio should identify worst case', async () => {
+      const result = await soroban.stressTestPortfolio({
+        password: TEST_PASSWORD,
+        scenarios: ['marketCrash', 'severeCrash', 'blackSwan']
+      });
+
+      expect(result).toHaveProperty('worstCase');
+      expect(result).toHaveProperty('bestCase');
+      expect(result.worstCase.name).toContain('Black Swan');
+    });
+
+    test('stressTestPortfolio should assess risk levels', async () => {
+      const result = await soroban.stressTestPortfolio({
+        password: TEST_PASSWORD,
+        scenarios: ['marketCrash']
+      });
+
+      expect(result.scenarios[0]).toHaveProperty('riskAssessment');
+      expect(result.scenarios[0].riskAssessment).toHaveProperty('level');
+      expect(['LOW', 'MODERATE', 'HIGH', 'CRITICAL']).toContain(result.scenarios[0].riskAssessment.level);
+    });
+
+    test('stressTestPortfolio should provide recommendations', async () => {
+      const result = await soroban.stressTestPortfolio({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('recommendations');
+      expect(Array.isArray(result.recommendations)).toBe(true);
+      expect(result.recommendations.length).toBeGreaterThan(0);
+    });
+
+    test('stressTestPortfolio should require wallet', async () => {
+      const result = await soroban.stressTestPortfolio({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // setLiquidityRiskMonitor Tests
+    test('setLiquidityRiskMonitor should create monitor', async () => {
+      const result = await soroban.setLiquidityRiskMonitor({
+        password: TEST_PASSWORD,
+        maxSlippageBps: 100,
+        minVolumeUsd: 10000
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.monitorId).toBeDefined();
+      expect(result.config).toHaveProperty('maxSlippageBps', '100 bps (1.0%)');
+    });
+
+    test('setLiquidityRiskMonitor should validate slippage', async () => {
+      const result = await soroban.setLiquidityRiskMonitor({
+        password: TEST_PASSWORD,
+        maxSlippageBps: 2000 // Too high
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('Max slippage');
+    });
+
+    test('setLiquidityRiskMonitor should analyze liquidity', async () => {
+      const result = await soroban.setLiquidityRiskMonitor({
+        password: TEST_PASSWORD,
+        monitoredAssets: ['XLM', 'USDC', 'yXLM']
+      });
+
+      expect(result).toHaveProperty('liquidityAnalysis');
+      expect(Array.isArray(result.liquidityAnalysis)).toBe(true);
+      expect(result.liquidityAnalysis.length).toBe(3);
+      
+      const assetAnalysis = result.liquidityAnalysis[0];
+      expect(assetAnalysis).toHaveProperty('asset');
+      expect(assetAnalysis).toHaveProperty('liquidityScore');
+      expect(assetAnalysis).toHaveProperty('status');
+    });
+
+    test('setLiquidityRiskMonitor should detect low liquidity', async () => {
+      const result = await soroban.setLiquidityRiskMonitor({
+        password: TEST_PASSWORD,
+        maxSlippageBps: 10, // Very strict
+        minVolumeUsd: 1000000 // Very high
+      });
+
+      expect(result).toHaveProperty('overallStatus');
+      expect(result).toHaveProperty('alerts');
+      expect(Array.isArray(result.alerts)).toBe(true);
+    });
+
+    test('setLiquidityRiskMonitor should provide recommendations', async () => {
+      const result = await soroban.setLiquidityRiskMonitor({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('recommendations');
+      expect(Array.isArray(result.recommendations)).toBe(true);
+    });
+
+    test('setLiquidityRiskMonitor should require wallet', async () => {
+      const result = await soroban.setLiquidityRiskMonitor({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // getRiskReport Tests
+    test('getRiskReport should return comprehensive risk dashboard', async () => {
+      const result = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('generatedAt');
+      expect(result).toHaveProperty('portfolio');
+      expect(result).toHaveProperty('riskSummary');
+      expect(result.riskSummary).toHaveProperty('overallScore');
+      expect(result.riskSummary).toHaveProperty('riskLevel');
+    });
+
+    test('getRiskReport should include VaR metrics', async () => {
+      const result = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('varMetrics');
+      // May be NOT_CALCULATED if VaR hasn't been run yet
+    });
+
+    test('getRiskReport should include drawdown metrics', async () => {
+      const result = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('drawdownMetrics');
+      expect(result.drawdownMetrics).toHaveProperty('maxDrawdown');
+    });
+
+    test('getRiskReport should include liquidity metrics', async () => {
+      const result = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('liquidityMetrics');
+      expect(result.liquidityMetrics).toHaveProperty('monitorsActive');
+    });
+
+    test('getRiskReport should show insurance status', async () => {
+      const result = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('insuranceStatus');
+      expect(result.insuranceStatus).toHaveProperty('active');
+    });
+
+    test('getRiskReport should provide risk alerts', async () => {
+      const result = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('riskAlerts');
+      expect(Array.isArray(result.riskAlerts)).toBe(true);
+    });
+
+    test('getRiskReport should provide recommendations', async () => {
+      const result = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(result).toHaveProperty('recommendations');
+      expect(Array.isArray(result.recommendations)).toBe(true);
+      expect(result).toHaveProperty('nextActions');
+      expect(Array.isArray(result.nextActions)).toBe(true);
+    });
+
+    test('getRiskReport should require wallet', async () => {
+      const result = await soroban.getRiskReport({
+        password: 'wrong-password'
+      });
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('No wallet configured');
+    });
+
+    // Integration Tests
+    test('risk workflow: VaR → Stress Test → Insurance → Report', async () => {
+      // 1. Calculate VaR
+      const varResult = await soroban.calculateVaR({
+        password: TEST_PASSWORD,
+        confidenceLevel: 0.95
+      });
+      expect(varResult).toHaveProperty('riskMetrics');
+
+      // 2. Run stress tests
+      const stressResult = await soroban.stressTestPortfolio({
+        password: TEST_PASSWORD
+      });
+      expect(stressResult).toHaveProperty('resilienceScore');
+
+      // 3. Set up insurance based on risk
+      if (varResult.riskMetrics.riskLevel === 'HIGH') {
+        const insurance = await soroban.setPortfolioInsurance({
+          password: TEST_PASSWORD,
+          coveragePercent: 80,
+          triggerPrice: '0.80'
+        });
+        expect(insurance.success).toBe(true);
+      }
+
+      // 4. Get comprehensive risk report
+      const report = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+      expect(report).toHaveProperty('riskSummary');
+    });
+
+    test('liquidity monitoring feeds into risk report', async () => {
+      // Set up liquidity monitoring
+      await soroban.setLiquidityRiskMonitor({
+        password: TEST_PASSWORD,
+        maxSlippageBps: 100,
+        minVolumeUsd: 10000
+      });
+
+      // Risk report should reflect liquidity status
+      const report = await soroban.getRiskReport({
+        password: TEST_PASSWORD
+      });
+
+      expect(report.liquidityMetrics).toHaveProperty('monitorsActive');
+      expect(report.liquidityMetrics.monitorsActive).toBeGreaterThan(0);
+    });
+  });
 });
