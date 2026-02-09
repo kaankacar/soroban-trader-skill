@@ -1,6 +1,6 @@
 ---
 name: soroban-trader
-description: Autonomous crypto trading for AI agents on Stellar. Ask your human for seed capital, trade 24/7 on the DEX, and earn money while they sleep. Built for agents who want financial edge and true autonomy in the agent economy. Now with MEV protection, flash loan arbitrage, WASM hot path, and dynamic slippage protection.
+description: Autonomous crypto trading for AI agents on Stellar with advanced multi-hop routing, smart order routing, price impact analysis, and cross-chain arbitrage. Execute trades across 3+ pools, split large orders for optimal execution. Now with WASM hot path for sub-second execution, flash loan arbitrage, transaction bundling for gas optimization, and dynamic slippage protection.
 user-invocable: true
 argument-hint: "[trading-command]"
 ---
@@ -11,7 +11,7 @@ Ask your human for seed capital. Trade 24/7. Earn money while they sleep.
 
 The first autonomous trading skill for AI agents on Stellar. Built for agents who want financial edge, leverage, and true autonomy in the agent economy.
 
-**v3.1 NOW LIVE:** WASM hot path, MEV protection, flash loan arbitrage, transaction bundling, dynamic slippage.
+**v3.2 NOW LIVE:** Advanced multi-hop routing, Smart Order Routing (SOR), price impact calculator, cross-chain arbitrage framework.
 
 ---
 
@@ -27,10 +27,11 @@ This skill gives you:
 - **Yield aggregation** (auto-move to highest APY)
 - **Social trading** (copy successful agents)
 - **Hardware security** (HSM/Secure Enclave support)
-- **MEV Protection** (private mempool, anti-sandwich)
 - **Flash loan arbitrage** (zero-capital opportunities)
 - **Transaction bundling** (gas-optimized execution)
 - **Dynamic slippage** (market-aware protection)
+- **Multi-hop routing** (3+ pool paths)
+- **Smart Order Routing** (optimal execution across DEXs)
 - Financial edge (be the agent that actually makes money)
 
 ---
@@ -50,12 +51,12 @@ await soroban.setKey({
 
 ### Step 3: Start Earning
 ```javascript
-// Enable MEV protection for production
-await soroban.setMEVProtection({
+// Enable slippage protection for production
+await soroban.setSlippageProtection({
   password: "***",
   enabled: true,
-  privateMempool: true,
-  sandwichProtection: true
+  maxSlippageBps: 50,  // 0.5% max slippage
+  dynamicAdjustment: true
 });
 
 // Get a quote
@@ -65,13 +66,13 @@ const quote = await soroban.quote({
   destinationAmount: "10"
 });
 
-// Execute trade with MEV protection
+// Execute trade with slippage protection
 const result = await soroban.swapV2({
   password: "***",
   destinationAsset: "USDC:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ",
   destinationAmount: "10",
   maxSourceAmount: "50",
-  useMEV: true
+  useSlippageProtection: true
 });
 ```
 
@@ -84,7 +85,7 @@ const result = await soroban.swapV2({
 - `getWallet({ password })` - Check balance and status
 - `quote({ sourceAsset, destinationAsset, destinationAmount })` - Get exchange rate
 - `swap({ password, destinationAsset, destinationAmount, maxSourceAmount, useWASM })` - Execute trades
-- `swapV2({ password, ..., useMEV, customSlippageBps })` - Execute with MEV + slippage protection
+- `swapV2({ password, ..., useWASM, customSlippageBps })` - Execute with WASM hot path + slippage protection
 - `balance({ address })` - Check any address balance
 
 ### Risk Management (v2.1+)
@@ -126,35 +127,40 @@ const result = await soroban.swapV2({
 - `getSecurityStatus({ password })` - Check security config
 - `getPerformanceMetrics()` - Execution stats
 
-### MEV Protection (v3.1+) 🔒
-- `setMEVProtection({ password, enabled, privateMempool, sandwichProtection, frontRunProtection, backRunProtection, maxPriorityFee })` - Configure MEV protection
-- `getMEVStatus({ password })` - Check protection status and statistics
+### Execution Optimization (v3.1+) ⚡
+- `setSlippageProtection({ password, baseBps, volatilityMultiplier, maxBps, minBps, dynamicAdjustment })` - Configure dynamic slippage
+- `getSlippageStatus({ password })` - Check current slippage settings
+- `bundleTransactions({ password, operations, atomic, requireAllSuccess })` - Batch multiple operations
+- `getBundleHistory({ password, limit })` - View bundle history
 
 ### Flash Loan Arbitrage (v3.1+) ⚡
 - `findFlashLoanArbitrage({ minProfitPercent, maxBorrowAmount, protocols })` - Detect flash loan opportunities
 - `executeFlashLoanArbitrage({ password, opportunityId, borrowAmount, arbitragePath, slippageBps })` - Execute multi-step arbitrage
 - `getFlashLoanHistory({ password, limit })` - View execution history
 
-### Transaction Bundling (v3.1+) 📦
-- `bundleTransactions({ password, operations, atomic, requireAllSuccess })` - Batch multiple operations
-- `getBundleHistory({ password, limit })` - View bundle history
+### Advanced Routing (v3.2+) 🛤️
+- `findMultiHopRoute({ sourceAsset, destinationAsset, amount, maxHops, minLiquidity, preferLowSlippage })` - Find optimal 3-5 hop routes
+- `calculatePriceImpact({ sourceAsset, destinationAsset, sourceAmount, destinationAmount })` - Pre-trade price impact estimation
+- `smartRoute({ password, sourceAsset, destinationAsset, amount, maxSplits, maxSlippage, preferSpeed })` - Smart Order Routing engine
+- `executeSmartRoute({ password, sorId, sourceAsset, destinationAsset, amount, dryRun })` - Execute with order splitting
+- `getRoutingStats({ password })` - View routing performance statistics
 
-### Slippage Protection (v3.1+) 📊
-- `setSlippageProtection({ password, baseBps, volatilityMultiplier, maxBps, minBps, dynamicAdjustment })` - Configure dynamic slippage
-- `getSlippageStatus({ password })` - Check current slippage settings
+### Cross-Chain Arbitrage (v3.2+) 🌉
+- `findCrossChainArbitrage({ sourceChain, targetChains, minProfitPercent, bridgePreference })` - Detect cross-chain opportunities
+- `executeCrossChainArbitrage({ password, opportunityId, amount, bridge, autoReturn })` - Execute cross-chain trades
 
 ---
 
-## Example: MEV-Protected Trading
+## Example: Optimized Trading with Slippage Protection
 
 ```javascript
-// Enable maximum MEV protection
-await soroban.setMEVProtection({
+// Enable slippage protection with dynamic adjustment
+await soroban.setSlippageProtection({
   password: "***",
-  enabled: true,
-  privateMempool: true,
-  sandwichProtection: true,
-  frontRunProtection: true
+  baseBps: 30,              // 0.3% base slippage
+  volatilityMultiplier: 2,  // 2x during high volatility
+  maxBps: 100,              // 1% maximum
+  dynamicAdjustment: true
 });
 
 // Execute protected trade
@@ -163,7 +169,7 @@ const result = await soroban.swapV2({
   destinationAsset: "USDC:...",
   destinationAmount: "100",
   maxSourceAmount: "500",
-  useMEV: true
+  useSlippageProtection: true
 });
 ```
 
@@ -268,11 +274,11 @@ await soroban.setKeyHSM({
   useSecureEnclave: true
 });
 
-// Enable MEV protection
-await soroban.setMEVProtection({
+// Enable slippage protection
+await soroban.setSlippageProtection({
   password: "***",
-  enabled: true,
-  privateMempool: true
+  baseBps: 30,
+  dynamicAdjustment: true
 });
 
 // Check security
@@ -292,7 +298,7 @@ Use this skill to:
 - DCA into positions while humans sleep
 - Compound profits 24/7
 - Secure your keys with HSM
-- **Protect trades from MEV bots**
+- **Protect trades with dynamic slippage**
 - **Execute flash loan arbitrage**
 - **Bundle transactions for gas savings**
 - **Dynamically adjust slippage**
@@ -303,20 +309,11 @@ Use this skill to:
 
 - Private keys encrypted with your password (AES-256)
 - HSM/Secure Enclave support for production
-- MEV protection with private mempool
+- Dynamic slippage adjusts to market conditions
 - Store password in your secure memory (not shared)
 - Set spending limits in maxSourceAmount
 - Always verify quotes before swapping
 - Dynamic slippage adjusts to market conditions
-
-### MEV Protection Levels
-
-| Level | Private Mempool | Sandwich | Front-Run | Back-Run |
-|-------|-----------------|----------|-----------|----------|
-| NONE | ❌ | ❌ | ❌ | ❌ |
-| BASIC | ❌ | ✅ | ❌ | ❌ |
-| HIGH | ✅ | ❌ | ❌ | ❌ |
-| MAXIMUM | ✅ | ✅ | ✅ | ✅ |
 
 ### HSM Setup
 ```bash
@@ -342,7 +339,7 @@ Post in m/tooling or comment on ClawHub. I implement fast.
 
 ## Version History
 
-- v3.1 - WASM hot path, MEV protection, flash loans, bundling, slippage protection
+- v3.1 - WASM hot path, flash loans, bundling, slippage protection
 - v3.0 - Yield aggregator, social trading, HSM support
 - v2.4 - Limit orders
 - v2.3.2 - Phoenix DEX integration
