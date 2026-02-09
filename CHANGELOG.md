@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.0] - 2026-02-09
+
+### 📊 V3.3: Portfolio Management - COMPLETE
+
+**Professional-grade portfolio management for AI agents.**
+
+### Added
+
+#### 📊 Portfolio Rebalancing Automation
+- **`setRebalancingStrategy({password, targetAllocations, driftThreshold, autoRebalance, rebalanceInterval, strategy})`** - Set target allocations and drift thresholds
+  - Support for conservative, balanced, aggressive, and custom strategies
+  - Drift threshold validation (1-50%)
+  - Automatic rebalancing on configurable intervals
+  - Target allocation validation (must sum to 100%)
+  - Rebalancing history tracking
+- **`getPortfolioAllocation({password, includeHistory})`** - Current vs target allocation analysis
+  - Real-time portfolio valuation
+  - Drift calculation per asset
+  - Rebalancing recommendations
+  - Historical rebalancing data
+  - Visual allocation comparison
+- **`autoRebalancePortfolio({password, force, dryRun, maxSlippageBps})`** - Execute rebalancing trades
+  - Dry run mode for simulation
+  - Force rebalance option
+  - Automatic trade calculation
+  - Slippage protection
+  - Transaction tracking
+
+#### 📈 Correlation Analysis for Risk Management
+- **`analyzeCorrelations({assets, lookbackDays})`** - Asset correlation analysis
+  - Pearson correlation coefficient calculation
+  - Correlation matrix visualization
+  - High correlation detection (diversification risk)
+  - Low correlation identification (diversification opportunities)
+  - Diversification score (0-100)
+  - Risk level classification
+  - Correlation caching for performance
+  - Rebalancing recommendations based on correlations
+
+#### 💰 Automated Tax-Loss Harvesting
+- **`findTaxLossOpportunities({password, minLossPercent, taxYear})`** - Identify loss harvesting opportunities
+  - Unrealized loss calculation
+  - Tax savings estimation (25% assumed rate)
+  - Equivalent asset suggestions for wash sale compliance
+  - Tax year tracking
+  - Deadline monitoring
+  - Opportunity ranking by loss amount
+- **`executeTaxLossHarvest({password, opportunityId, autoSwapToEquivalent, dryRun})`** - Execute tax loss harvesting
+  - Automatic equivalent asset swap
+  - Wash sale rule warnings
+  - Harvest record tracking
+  - Year-to-date harvesting summary
+  - Tax professional consultation recommendations
+
+#### 📊 Performance Attribution Analysis
+- **`getPerformanceAttribution({password, period, benchmark})`** - Performance attribution analysis
+  - Asset-level return calculation
+  - Weighted contribution analysis
+  - Alpha vs benchmark tracking
+  - Top contributors identification
+  - Top detractors identification
+  - Period comparison (7d, 30d, 90d, 1y)
+  - Historical attribution tracking
+  - Rebalancing recommendations
+
+#### 📈 Sharpe Ratio Optimization
+- **`optimizeSharpeRatio({password, targetSharpe, riskFreeRate, maxPositions})`** - Risk-adjusted return optimization
+  - Current Sharpe ratio calculation
+  - Target Sharpe gap analysis
+  - Asset-level Sharpe calculation
+  - Volatility analysis
+  - Correlation-aware optimization
+  - Optimized allocation suggestions
+  - Optimization history tracking
+  - Status classification (OPTIMAL/NEAR_OPTIMAL/NEEDS_IMPROVEMENT)
+
+#### 📋 Portfolio Summary
+- **`getPortfolioSummary({password})`** - Comprehensive portfolio overview
+  - Total portfolio value
+  - Asset count and diversification score
+  - Current Sharpe ratio
+  - Alpha vs benchmark
+  - Allocation drift status
+  - Performance summary
+  - Risk metrics
+  - Tax harvesting status
+  - Consolidated recommendations
+
+### Changed
+- Enhanced test suite with 35 new test cases for v3.3 features
+- Total test coverage: 114 test cases
+- Improved error handling for network failures (graceful fallbacks for testing)
+
+---
+
 ## [3.2.0] - 2026-02-09
 
 ### 🛤️ V3.2: Advanced Routing & Multi-Hop - COMPLETE
