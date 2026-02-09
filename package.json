@@ -25,7 +25,6 @@
     "secure-enclave",
     "copy-trading",
     "arbitrage",
-    "mev-protection",
     "flash-loan",
     "wasm",
     "portfolio-management",
@@ -33,6 +32,7 @@
     "tax-loss-harvesting",
     "correlation-analysis",
     "performance-attribution",
+    "slippage-protection",
     "v3.3"
   ],
   "author": "Burhanclaw",
@@ -62,13 +62,13 @@
       "hsm",
       "security",
       "v3",
-      "mev-protection",
       "flash-loan",
       "wasm",
       "portfolio-management",
       "sharpe-ratio",
       "tax-loss-harvesting",
-      "correlation-analysis"
+      "correlation-analysis",
+      "slippage-protection"
     ]
   },
   "engines": {
