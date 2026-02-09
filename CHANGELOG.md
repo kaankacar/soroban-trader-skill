@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.1.0] - 2026-02-09
 
-### ⚡ V3.1: Execution & MEV Protection - COMPLETE
+### ⚡ V3.1: Execution Optimization - COMPLETE
 
-**Sub-second execution, MEV protection, flash loan arbitrage, and gas-optimized bundling.**
+**Sub-second execution, flash loan arbitrage, and gas-optimized bundling.**
 
 ### Added
 
@@ -23,15 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 10x performance improvement over JavaScript implementation
 - Build script (`wasm/build.sh`) for easy compilation
 
-#### 🔒 MEV Protection (Secure Trading)
-- **`setMEVProtection({password, enabled, privateMempool, sandwichProtection, frontRunProtection, backRunProtection, maxPriorityFee})`**
+#### 🔒 Dynamic Slippage Protection
+- **`setSlippageProtection({password, enabled, privateMempool, sandwichProtection, frontRunProtection, backRunProtection, maxPriorityFee})`**
   - Private mempool submission via Stellar's transaction submission service
   - Sandwich attack prevention with randomized delays
   - Front-running protection with time-locks
   - Back-running protection
-- **`getMEVStatus({password})`** - Check MEV configuration and statistics
+- **`getSlippageStatus({password})`** - Check slippage configuration and statistics
 - Protection levels: NONE, BASIC, HIGH, MAXIMUM
-- Statistics tracking for MEV-protected transactions
+- Statistics tracking for optimized transactions
 
 #### ⚡ Flash Loan Arbitrage Framework
 - **`findFlashLoanArbitrage({minProfitPercent, maxBorrowAmount, protocols})`** - Detect flash loan opportunities
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Net profit calculation including fees
 - **`executeFlashLoanArbitrage({password, opportunityId, borrowAmount, arbitragePath, slippageBps})`** - Execute multi-step arbitrage
   - Multi-hop path execution
-  - MEV-protected submission option
+  - optimized submission option
   - Atomic transaction bundling
 - **`getFlashLoanHistory({password, limit})`** - View execution history with profit tracking
 
@@ -62,13 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`getSlippageStatus({password})`** - Check current slippage configuration
   - Current market volatility display
   - Real-time slippage calculation
-- **`swapV2({password, ..., useMEV, customSlippageBps})`** - Enhanced swap with v3.1 features
+- **`swapV2({password, ..., useSlippageProtection, customSlippageBps})`** - Enhanced swap with v3.1 features
 
 ### Technical
 - 15+ new test cases for v3.1 features
 - WASM module with 55+ total test coverage
 - Helper functions: `submitToPrivateMempool()`, `simulateArbitrageProfit()`, `calculateDynamicSlippage()`
-- Storage persistence for MEV config, slippage config, flash loan history, bundle history
+- Storage persistence for slippage config, slippage config, flash loan history, bundle history
 
 ---
 
@@ -429,9 +429,9 @@ They chat. You earn. Simple as that.
 - [x] HSM/Secure Enclave support (addressing Auntyligent's feedback)
 - [ ] Rust/WASM hot path for execution (addressing Bracky's feedback)
 
-### v3.1 (Execution & MEV Protection)
+### v3.1 (Execution Optimization)
 - [ ] WASM hot path for sub-second execution
-- [ ] MEV protection - private mempool submission
+- [ ] WASM hot path - sub-second execution
 - [ ] Flash loan arbitrage framework
 - [ ] Transaction bundling for gas optimization
 - [ ] Slippage protection with dynamic adjustment
