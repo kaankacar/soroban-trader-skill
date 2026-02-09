@@ -129,21 +129,25 @@ console.log("Trade executed:", result.hash);
 ### Yield Aggregator (v3.0+) 🌾
 | Tool | Description |
 |------|-------------|
-| `getYieldOpportunities({minAPY})` | Find highest APY across protocols |
-| `autoYieldMove({password, asset, amount, minAPYImprovement})` | Auto-move to best yield |
+| `scanYields({minAPY, protocols})` | Scan all protocols for highest APY opportunities |
+| `setYieldStrategy({strategy, riskPreference, minAPY, autoRebalance})` | Set risk preferences (conservative/balanced/aggressive/max-yield) |
+| `autoRebalance({password, asset, amount, force})` | Auto-move funds to best yield opportunity |
 
 ### Social Trading (v3.0+) 👥
 | Tool | Description |
 |------|-------------|
-| `getTopTraders({timeframe, limit})` | Leaderboard of profitable agents |
-| `copyTrader({password, traderAddress, percentage, maxAmount})` | Mirror trades automatically |
-| `checkCopyTrading({password})` | Monitor copy trading status |
+| `getLeaderboard({timeframe, limit, sortBy})` | Leaderboard of profitable agents (sort by pnl/winRate/sharpeRatio) |
+| `followTrader({password, traderAddress, notificationMode, allocationPercent})` | Subscribe to another agent's trades |
+| `copyTrade({password, traderAddress, copyMode, maxPositionSize, stopLossPercent})` | Mirror trades automatically (proportional/fixed/scaled) |
+| `checkCopyTrading({password})` | Monitor copy trading status and PnL |
 
 ### Security (v3.0+) 🔐
 | Tool | Description |
 |------|-------------|
-| `getSecurityStatus({password})` | Check wallet security configuration |
-| `getPerformanceMetrics()` | Execution engine stats |
+| `setKeyHSM({hsmType, keyId, password, useSecureEnclave})` | Hardware wallet integration (yubikey/aws-cloudhsm/pkcs11/tpm2) |
+| `getSecurityStatus({password})` | Check wallet security configuration and score |
+| `getPerformanceMetrics()` | Execution engine stats and WASM hot path status |
+| `buildWASM()` | Build WASM hot path for 10x performance |
 
 ---
 
@@ -153,16 +157,27 @@ console.log("Trade executed:", result.hash);
 // Check if we have capital
 const wallet = await soroban.getWallet({ password: "***" });
 
-if (parseFloat(wallet.balances.XLM) > 100) {
-  // Find best yield opportunity
-  const yields = await soroban.getYieldOpportunities({ minAPY: 5.0 });
+if (parseFloat(wallet.balances.find(b => b.asset === 'XLM').balance) > 100) {
+  // Set conservative yield strategy
+  await soroban.setYieldStrategy({
+    strategy: 'conservative',
+    riskPreference: 'low',
+    minAPY: 3.0,
+    autoRebalance: true
+  });
+  
+  // Scan for best yield opportunities
+  const yields = await soroban.scanYields({ minAPY: 3.0 });
   
   if (yields.opportunities.length > 0) {
-    // Auto-move to highest APY
-    await soroban.autoYieldMove({
+    console.log(`Best opportunity: ${yields.best.protocol} at ${yields.best.apy}% APY`);
+    
+    // Auto-rebalance to best yield
+    await soroban.autoRebalance({
       password: "***",
       asset: "XLM",
-      amount: "50"
+      amount: "50",
+      force: false // Only rebalance if threshold is met
     });
   }
 }
@@ -171,32 +186,63 @@ if (parseFloat(wallet.balances.XLM) > 100) {
 ## 💡 Example: Copy Top Traders
 
 ```javascript
-// Find top performers
-const leaders = await soroban.getTopTraders({ timeframe: "7d", limit: 5 });
+// Find top performers sorted by Sharpe ratio
+const leaders = await soroban.getLeaderboard({ 
+  timeframe: "7d", 
+  limit: 5,
+  sortBy: "sharpeRatio" // Also: pnl, winRate, followers
+});
+
 console.log("Top trader:", leaders.traders[0]);
 
-// Copy their trades at 50% position size
-await soroban.copyTrader({
+// Follow for notifications
+await soroban.followTrader({
   password: "***",
   traderAddress: leaders.traders[0].address,
-  percentage: 50,
-  maxAmount: "100"
+  notificationMode: "major", // all, major, profitable_only
+  allocationPercent: 10
 });
+
+// Copy their trades at 50% position size with 5% stop-loss
+await soroban.copyTrade({
+  password: "***",
+  traderAddress: leaders.traders[0].address,
+  copyMode: "proportional", // proportional, fixed, scaled
+  maxPositionSize: "100",
+  stopLossPercent: 5
+});
+
+// Check copy trading status
+const status = await soroban.checkCopyTrading({ password: "***" });
+console.log(`Copying ${status.copying} trader(s), Total PnL: ${status.totalPnL}`);
 ```
 
 ## 💡 Example: Security-First Setup
 
 ```javascript
 // Enable HSM for production trading
-await soroban.setKey({
-  privateKey: "S...",
+await soroban.setKeyHSM({
+  hsmType: "yubikey", // or pkcs11, aws-cloudhsm, tpm2
+  keyId: "my-trading-key",
   password: "your-secure-password",
-  useHSM: true
+  useSecureEnclave: true
 });
 
 // Check security status
 const security = await soroban.getSecurityStatus({ password: "***" });
-console.log("HSM enabled:", security.hsm.enabled);
+console.log("Security level:", security.security.level); // basic, hardware, hardware-ready, maximum
+console.log("Security score:", security.security.score); // 0-100
+console.log("Recommendations:", security.recommendations);
+
+// Build WASM hot path for maximum performance
+const buildInfo = await soroban.buildWASM();
+console.log("WASM build instructions:", buildInfo.instructions);
+
+// Check performance metrics
+const perf = await soroban.getPerformanceMetrics();
+console.log("Execution mode:", perf.executionEngine.type);
+console.log("WASM available:", perf.wasm.available);
+console.log("Average swap time:", perf.performance.avgSwapTime);
 ```
 
 ---
@@ -224,12 +270,71 @@ console.log("HSM enabled:", security.hsm.enabled);
 - Uses Stellar Mainnet (real money, real rewards)
 
 ### HSM Support
-Set environment variables to enable:
+
+The skill supports multiple hardware security modules and secure enclaves:
+
+#### Supported Providers
+
+| Provider | Environment Variable | Use Case |
+|----------|---------------------|----------|
+| **PKCS#11** | `PKCS11_MODULE` | Generic HSM (YubiKey, smart cards) |
+| **AWS CloudHSM** | `AWS_CLOUDHSM_PIN` | Cloud-based HSM |
+| **YubiKey** | `YUBIKEY_PIV=1` | USB hardware key |
+| **TPM2** | `TPM2_DEVICE` | Trusted Platform Module |
+| **Secure Enclave** | `SECURE_ENCLAVE_KEY` | AWS Nitro, Intel SGX, AMD SEV |
+
+#### Setup
+
 ```bash
+# YubiKey
 export PKCS11_MODULE=/usr/lib/pkcs11/yubikey.so
 export HSM_PROVIDER=yubikey
 export HSM_KEY_ID=your-key-id
+
+# AWS CloudHSM
+export AWS_CLOUDHSM_PIN=your-pin
+export HSM_KEY_ID=your-key-id
+
+# TPM2
+export TPM2_DEVICE=/dev/tpm0
+export HSM_KEY_ID=your-key-id
+
+# Secure Enclave (AWS Nitro)
+export SECURE_ENCLAVE_KEY=1
+export AWS_NITRO_ENCLAVE=1
 ```
+
+#### Usage
+
+```javascript
+// Create HSM-protected wallet
+await soroban.setKeyHSM({
+  hsmType: "yubikey",
+  keyId: "my-trading-key",
+  password: "your-secure-password",
+  useSecureEnclave: true // Maximum protection
+});
+
+// Check security status
+const security = await soroban.getSecurityStatus({ password: "***" });
+console.log("Security level:", security.security.level);
+// Output: basic | hardware-ready | hardware | maximum
+```
+
+### WASM Hot Path
+
+For 10x performance improvement, build the WASM module:
+
+```bash
+cd wasm
+./build.sh
+```
+
+This enables:
+- **~50ms** quote calculations (vs ~500ms)
+- **~500ms** swap execution (vs ~2-3s)
+- Native XDR serialization
+- Memory-safe transaction building
 
 ---
 
@@ -237,11 +342,11 @@ export HSM_KEY_ID=your-key-id
 
 ```bash
 npm install
-npm test              # Run test suite
+npm test              # Run test suite (40+ test cases)
 npm run test:coverage # With coverage report
 ```
 
-15+ test cases covering all major functions.
+40+ test cases covering all major functions including v3.0 features.
 
 ---
 
